@@ -1,0 +1,371 @@
+id: void
+title: VOID
+version: "1.2.0"
+release-notes: |
+  This release brings the StartOS package up to the state of the
+  monorepo as of May 2026. Operators upgrading from 1.1.0 should
+  re-read the environment-variable section below — defaults and
+  startup guards have changed.
+
+  Security and resilience
+  - Trusted-proxy IP handling: Socket.io now reads the rightmost
+    X-Forwarded-For token (configurable via TRUST_PROXY_HOPS,
+    default 1) so per-IP connection caps and join throttles cannot
+    be bypassed by a spoofed leftmost hop.
+  - Single-use room-creation JWTs: the room-creation token now
+    embeds the Lightning paymentHash and is consumed on first use,
+    so one paid invoice cannot be replayed to mint many rooms.
+  - Signed-hello browser handshake: per-session Ed25519 keys bind
+    each ECDH public key to a session identity and to the room ID,
+    blocking cross-room replay. Failed verification now tears the
+    secure channel down loudly instead of silently falling back to
+    the phrase key.
+  - Host-role binding: the empty-room "first joiner becomes host"
+    auto-promotion is removed. Host privileges only return to a
+    phrase-holder whose JWT carries a paymentHash recorded against
+    the room.
+  - URL-fragment hygiene on leave: every leave path now uses
+    history.replaceState, so the fragment-bearing URL is no longer
+    pinned to a back-button history entry. A static test fails the
+    build if a regression reintroduces pushState.
+  - Coturn placeholder-secret guard: the API server refuses to
+    start if TURN_SECRET (or PAYWALL_SECRET) is set to one of the
+    well-known placeholder strings shipped in the README and
+    example configs. The process exits before any port is bound.
+  - Container runs as the non-root "node" user. CI guards on the
+    production and pilot images assert this on every build.
+  - JWT verify call-sites pin algorithms: ["HS256"] explicitly.
+  - PaymentHash-keyed extension-token consumption uses SHA-256 of
+    the raw JWT so two distinct extension payments for the same
+    room cannot collide.
+  - Lightning settlement → room-create timing is jittered 10–60s
+    to weaken passive payment-to-room correlation. Residual
+    correlation surface is documented in the threat model.
+
+  Browser-side hardening (no change to operator surface)
+  - Sub-Resource Integrity on every script and stylesheet the
+    served HTML loads.
+  - Reproducible builds for the void-client bundle.
+  - CSP/HSTS preload posture cleaned up; a single Helmet config
+    drives the served headers.
+  - Encrypted-at-rest host token in localStorage (HKDF-derived
+    storage tag and AES-GCM key from the room phrase).
+
+  Recovery and pricing surface (already present in 1.1.0; called
+  out here because the hosted UI now exposes it more visibly)
+  - One-time 4-word BIP-39 recovery code minted alongside the host
+    JWT at first paid-status confirmation. Single-use; never
+    extends the paid window past its original end.
+  - Standard tier: 1,000 sats, 65-minute room TTL.
+  - Day tier: 24-hour paid window with the same per-room semantics.
+
+  Documentation
+  - "BROWSER-LEVEL SURFACES" disclosure on the in-app threat-model
+    page enumerates the six runtime-inherited surfaces (DNS, the
+    system clipboard, notifications, extension DOM access, WebRTC
+    getStats, managed-browser permission logging) that no app code
+    can mitigate.
+  - Internal and public security audits re-run April–May 2026; the
+    public summary is served at /audit and ships in the bundle.
+  - Marketing-claims-audit doc tracks every load-bearing claim
+    against the code that backs it.
+
+  Env-var surface (see below)
+  - LIGHTNING_BACKEND, PAYWALL_SECRET, LNBITS_*, BTCPAY_*,
+    TURN_URL, TURN_SECRET, TURN_CREDENTIAL_TTL (default 4500),
+    STUN_URL, TRUST_PROXY_HOPS
+    (default 1), PAYWALL_JITTER_MIN_MS (default 10000),
+    PAYWALL_JITTER_MAX_MS (default 60000), PAYWALL_JITTER_DISABLE
+    (default unset; set to "1" only when settlement-to-room-create
+    timing correlation is not part of your threat model), LOG_LEVEL.
+
+  Upgrade behavior (N → N+1, declared at the manifest layer so the
+  StartOS upgrade-notification surface carries it to operators)
+  - In-flight rooms terminate ephemerally on the process restart
+    that the package upgrade triggers. Room state is in-memory by
+    design (no database, no on-disk room state); active peers see
+    signaling drop and rejoin a fresh room.
+  - PAYWALL_SECRET on restart: if the operator set it, the value
+    persists across upgrades because it lives in the operator's
+    env (not in any package-managed volume), and JWTs minted
+    before the upgrade remain valid for their TTL. If unset, a
+    fresh ephemeral per-process secret is generated on each start
+    — JWTs minted before the upgrade are invalidated. Hosts who
+    lose their JWT but kept their 4-word recovery code can
+    re-mint against the original paymentHash for the remaining
+    paid window.
+  - TURN_SECRET on restart: same as PAYWALL_SECRET — operator-env
+    managed, persists across upgrades unless the operator rotates
+    it. If TURN_SECRET is rotated as part of the upgrade, both
+    Coturn's static-auth-secret and the API server's TURN_SECRET
+    must be updated together (see the Coturn config workflow note
+    below).
+  - No data migration is performed and none is required: there is
+    no schema, no backfill, no format-conversion step. The
+    omitted `migrations` block in this manifest is the correct
+    "no-op upgrade" declaration.
+
+  Coturn configuration workflow (manifest-level reference; full
+  rationale in the README-selfhost.md §4a setup section)
+  - The package ships `coturn/turnserver.conf.example` (the actual
+    `coturn/turnserver.conf` is gitignored to prevent shipping a
+    placeholder shared secret in the image).
+  - Operator workflow: `cp coturn/turnserver.conf.example
+    coturn/turnserver.conf`, replace the placeholder
+    `static-auth-secret` line with the output of `openssl rand
+    -hex 32`, and set the same value as TURN_SECRET in the env
+    surface declared above.
+  - The API server's startup guard refuses to boot if TURN_SECRET
+    is set to one of the well-known placeholder values shipped in
+    the example file, so the workflow fails closed if step 2 is
+    skipped.
+  - On StartOS specifically, the standard pattern is to depend on
+    the StartOS-packaged `coturn` service (declared in the
+    `dependencies.coturn` block), in which case the operator sets
+    the matching shared secret via the StartOS UI rather than
+    editing the bundled example file.
+
+  Dependency / dev-tool hygiene
+  - Tasks #242 and #251 picked up CVE bumps in transitive dev-tool
+    dependencies. None affect the production runtime image — the
+    container surface is unchanged in this bump — but downstream
+    packagers verifying lockfile-complete CVE state should know
+    the bumps landed.
+license: AGPL-3.0-or-later
+# Repository, support, and marketing URLs below are the canonical public-
+# repository URLs. They replaced the prior RFC 2606 reserved-domain
+# placeholders when the public repository was published; that placeholder->
+# canonical swap closed the only residual gap the StartOS / Umbrel manifest
+# review had tracked against these fields (the placeholder URLs had blocked
+# store submission until the public repo was live). The StartOS / Umbrel
+# manifest review and its re-eval trigger are documented in docs/security-audit-public-2026-04.md §11 (limitation 9).
+wrapper-repo: https://github.com/DotMatrixIO/void
+upstream-repo: https://github.com/DotMatrixIO/void
+support-site: https://github.com/DotMatrixIO/void/issues
+marketing-site: https://github.com/DotMatrixIO/void
+description:
+  short: Stateless, end-to-end encrypted P2P video over Lightning
+  long: >-
+    VOID is a stateless, end-to-end encrypted peer-to-peer video
+    conferencing app. No accounts, no database, no logs. Rooms
+    hold up to 4 participants, expire automatically (65 minutes
+    on the standard tier, 24 hours on the day tier), and live in
+    process memory only — restart equals clean slate. The host
+    pays a Lightning invoice (1,000 sats on the standard tier) to
+    create a room and is issued a one-time 4-word BIP-39 recovery
+    code so the room can be reclaimed within the paid window
+    after a tab close. Joiners enter free using the room phrase,
+    which is shared via the URL fragment and never sent to the
+    server. Media flows browser-to-browser over WebRTC; the
+    bundled Coturn relay handles NAT traversal. The signaling
+    server is unable to decrypt session traffic (per-session ECDH
+    P-384 with Ed25519 signed-hello binding; AES-GCM payloads;
+    argon2id m=64 MiB / t=3 / p=1 phrase derivation). This
+    distribution ships the human video/audio product only —
+    VOID is human-only; all agent code has been removed.
+assets:
+  license: LICENSE
+  icon: void-icon.png
+main:
+  type: docker
+  image: main
+  # On StartOS the operator's settings (defined in assets/config_spec.yaml and
+  # written by the `config` set procedure below to /root/start9/config.yaml on
+  # the `main` data volume) are bridged into the process environment by
+  # docker_entrypoint.mjs before it imports the real server. Plain-Docker /
+  # Umbrel deployments do not use this entrypoint — they get their environment
+  # straight from docker-compose.yml and run the Dockerfile CMD directly.
+  entrypoint: ["node", "--enable-source-maps", "./docker_entrypoint.mjs"]
+  args: []
+  mounts:
+    main: /root
+  io-format: yaml
+# Operator configuration surface. This resolves a build-readiness gap the
+# StartOS / Umbrel manifest review had flagged: there was previously no StartOS
+# config UI, so secrets / Lightning / TURN could not be set through StartOS and
+# the container booted on Dockerfile defaults only. The get/set procedures
+# run the StartOS-provided `compat` system image against the config spec and
+# rules mounted from the package assets volume. `config set` validates the
+# operator's input and persists it to /root/start9/config.yaml on the `main`
+# data volume; the main entrypoint reads that file at boot. Every env var the
+# `alerts.start` block tells operators to set is exposed here.
+config:
+  get:
+    type: docker
+    image: compat
+    system: true
+    entrypoint: compat
+    args:
+      - config
+      - get
+      - /root
+      - /mnt/assets/config_spec.yaml
+      - /mnt/assets/config_rules.yaml
+    mounts:
+      main: /root
+      compat: /mnt/assets
+    io-format: yaml
+  set:
+    type: docker
+    image: compat
+    system: true
+    entrypoint: compat
+    args:
+      - config
+      - set
+      - void
+      - /root
+      - /mnt/assets/config_rules.yaml
+    mounts:
+      main: /root
+      compat: /mnt/assets
+    io-format: yaml
+health-checks:
+  web-ui:
+    name: Web UI
+    success-message: VOID is ready
+    type: docker
+    image: main
+    system: false
+    # The API server exposes a dedicated /api/health endpoint that returns
+    # JSON {"status":"ok"} (mirror at /api/healthz). Probing this rather
+    # than "/" avoids loading the full client bundle on every health tick
+    # and gives a deterministic 200/non-200 signal.
+    #
+    # Probe with node's built-in fetch (the same form as the Dockerfile
+    # HEALTHCHECK) rather than wget: the production image is
+    # node:22.12.0-slim with no apt-get step, so wget is NOT present and a
+    # wget-based probe would report the service unhealthy even when it is
+    # serving. node is the entrypoint runtime, so it is guaranteed present.
+    entrypoint: ["node", "-e", "fetch('http://localhost:3000/api/health').then(r=>{if(!r.ok)process.exit(1)}).catch(()=>process.exit(1))"]
+    args: []
+    inject: true
+    io-format: yaml
+interfaces:
+  main:
+    name: Web Interface
+    description: VOID video conferencing UI
+    # tor-config makes the app .onion-reachable via a
+    # StartOS-managed Tor hidden service that fronts the signaling
+    # layer. This is reachability — not end-to-end Tor routing:
+    # WebRTC media still gathers ICE candidates on the user's
+    # underlying network regardless of how the page loaded (see
+    # ThreatModelPage "TOR AND THE MEDIA PATH" and
+    # README-selfhost.md §6c). The LAN HTTPS interface below is
+    # also offered; which one a user selects is a StartOS-side
+    # choice. Wording is tracked in
+    # docs/marketing-claims-audit.md (Task #238).
+    tor-config:
+      port-mapping:
+        80: "3000"
+    lan-config:
+      443:
+        ssl: true
+        internal: 3000
+    ui: true
+    protocols:
+      - tcp
+      - http
+# Host-network-mode justification (recorded at the manifest layer so a
+# platform reviewer can find it here, not just in the audit doc): the
+# bundled Coturn relay needs `network_mode: host` because the relay-port
+# range (49152-65535/udp) must be reachable on the host directly — Docker
+# bridge NAT breaks the ICE candidate addresses Coturn advertises. VOID's
+# own image does NOT request host network mode; only the Coturn dependency
+# does, and it is declared as opt-out so operators with an external TURN
+# provider get a no-host-mode deployment automatically. Full rationale in
+# `docs/security-audit-public-2026-04.md` §11 (limitation 9).
+dependencies:
+  coturn:
+    version: ">=4.6.0"
+    description: >-
+      TURN/STUN relay for NAT traversal. Strongly recommended for
+      reliable WebRTC connections behind symmetric NAT, carrier
+      NAT, hotel/office firewalls, and mobile networks. The API
+      server mints ephemeral HMAC-SHA1 TURN credentials with a
+      lifetime of TURN_CREDENTIAL_TTL seconds (default 4500 — room
+      TTL of 3900 plus a 10-minute safety buffer) and refuses to
+      start if TURN_SECRET is set to a known placeholder. To use
+      an external TURN provider instead, leave the bundled service
+      unconfigured and set TURN_URL / TURN_SECRET to the external
+      endpoint.
+    requirement:
+      type: opt-out
+      how: Set TURN_URL and TURN_SECRET to point at an external TURN server.
+# `main` is a small data volume that persists ONLY the operator config written
+# by `config set` (/root/start9/config.yaml). It is NOT room state: rooms,
+# recovery codes, and JWT secrets remain in process memory and are wiped on
+# restart by design (docs/security-audit-public-2026-04.md §11, limitation 9). `compat` is the
+# read-only assets volume that exposes the bundled config_spec.yaml /
+# config_rules.yaml to the get/set procedures above. The package still requests
+# no host bind mounts (main.mounts maps the managed volume, not a host path).
+volumes:
+  main:
+    type: data
+  compat:
+    type: assets
+alerts:
+  start: >-
+    On StartOS, set everything below through the package Config screen
+    (Settings → Config) — the values you enter are persisted and
+    bridged into the container environment on every start; you do not
+    edit env vars by hand. VOID needs Lightning and TURN configuration
+    to be useful in production. Required environment variables:
+
+    LIGHTNING_BACKEND — one of "mock" (development only), "lnbits",
+    or "btcpay". Mock invoices can only be settled via the
+    /api/paywall/dev-pay endpoint, which is automatically disabled
+    when NODE_ENV=production.
+
+    PAYWALL_SECRET — 32-byte hex (openssl rand -hex 32). Optional
+    on a single instance (an ephemeral per-process secret is used
+    when unset; JWTs invalidate on restart by design). The server
+    refuses to start if this is set to a known placeholder.
+
+    Lightning backend credentials — LNBITS_URL + LNBITS_API_KEY for
+    the LNbits backend, or BTCPAY_URL + BTCPAY_API_KEY +
+    BTCPAY_STORE_ID for the BTCPay backend.
+
+    TURN_URL and TURN_SECRET — point either at the bundled Coturn
+    service (using the same shared secret as turnserver.conf's
+    static-auth-secret) or at an external TURN provider that
+    supports HMAC-SHA1 ephemeral credentials. The server refuses
+    to start if TURN_SECRET is set to a known placeholder.
+
+    Optional: TURN_CREDENTIAL_TTL (default 4500), STUN_URL,
+    TRUST_PROXY_HOPS (default 1; raise if you run more proxies in
+    front of the app), LOG_LEVEL (default "warn").
+
+    Optional operator alerts — NTFY_TOPIC routes four signals (CSP
+    report wave, Lightning response-shape drift, sustained payment
+    503s, and — via CI — new High/Critical CVEs) to an ntfy topic.
+    NTFY_SERVER (default https://ntfy.sh) and NTFY_TOKEN (bearer for
+    an access-controlled server) are optional. With NTFY_TOPIC unset
+    the alerting is a silent no-op. Treat the topic as a secret.
+
+    Tor-only deployment switch (see README-selfhost.md §6b for the
+    full mechanism): operators who want this package to
+    ship .onion-only — no LAN HTTPS surface at all — can delete
+    (or comment out) the `lan-config` block in this manifest and
+    sideload the edited .s9pk. The default keeps both interfaces
+    advertised because most StartOS users want LAN access; the
+    Tor-only mode is opt-in. Set TOR_ONLY=1 alongside the manifest
+    edit to activate the onion-only runtime posture: /api/ice-servers
+    omits any configured STUN_URL (a STUN request would leak each
+    peer's public IP to a clearnet third party and defeat onion-only
+    routing), the startup banner confirms the posture, and the server
+    warns at startup if TURN_URL is set but is not a turns: relay on a
+    .onion host. See README-selfhost.md §6b.
+    The security tradeoff (no LAN access, all access via Tor;
+    reduced discoverability for casual users; recommended only
+    when the LAN itself is part of your threat model) is documented
+    in README-selfhost.md §6b alongside the cross-reference to the
+    onion-mirror runbook (`docs/onion-mirror-runbook.md`).
+
+    Settlement-to-room-create jitter (M-04 mitigation):
+    PAYWALL_JITTER_MIN_MS (default 10000) and PAYWALL_JITTER_MAX_MS
+    (default 60000) bound the random delay added between Lightning
+    payment confirmation and room creation. PAYWALL_JITTER_DISABLE
+    set to "1" turns the delay off; only do this if passive
+    payment-to-room timing correlation is not part of your threat
+    model.

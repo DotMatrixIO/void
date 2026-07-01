@@ -1,0 +1,36 @@
+services:
+  void:
+    build: .
+    restart: unless-stopped
+    # Give the api-server up to 10s after SIGTERM to broadcast
+    # `server-shutdown` to every connected socket and drain its in-flight
+    # writes before docker escalates to SIGKILL. The container's own
+    # SHUTDOWN_DRAIN_MS (default 5000ms) leaves a safety margin inside
+    # this window for httpServer.close() to return.
+    stop_grace_period: 10s
+    ports:
+      - "3000:3000"
+    environment:
+      PORT: "3000"
+      NODE_ENV: production
+      SERVE_STATIC: "1"
+      CLIENT_DIST: ./client
+      PAYWALL_SECRET: ${PAYWALL_SECRET:-}
+      LIGHTNING_BACKEND: ${LIGHTNING_BACKEND:-mock}
+      LNBITS_URL: ${LNBITS_URL:-}
+      LNBITS_API_KEY: ${LNBITS_API_KEY:-}
+      BTCPAY_URL: ${BTCPAY_URL:-}
+      BTCPAY_API_KEY: ${BTCPAY_API_KEY:-}
+      BTCPAY_STORE_ID: ${BTCPAY_STORE_ID:-}
+      TURN_URL: ${TURN_URL:-}
+      TURN_SECRET: ${TURN_SECRET:-}
+      TURN_CREDENTIAL_TTL: ${TURN_CREDENTIAL_TTL:-4500}
+      STUN_URL: ${STUN_URL:-}
+
+  coturn:
+    image: coturn/coturn:latest
+    restart: unless-stopped
+    network_mode: host
+    volumes:
+      - ./coturn/turnserver.conf:/etc/turnserver.conf:ro
+    command: ["-c", "/etc/turnserver.conf"]

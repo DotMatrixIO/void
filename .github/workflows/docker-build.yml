@@ -1,0 +1,135 @@
+name: Docker Build Verification
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - "Dockerfile"
+      - "docker-compose.yml"
+      - "artifacts/**"
+      - "lib/**"
+      - "attached_assets/**"
+      - "package.json"
+      - "pnpm-workspace.yaml"
+      - "pnpm-lock.yaml"
+      - "tsconfig.json"
+      - "tsconfig.base.json"
+      - ".github/workflows/docker-build.yml"
+  pull_request:
+    branches: [main]
+    paths:
+      - "Dockerfile"
+      - "docker-compose.yml"
+      - "artifacts/**"
+      - "lib/**"
+      - "attached_assets/**"
+      - "package.json"
+      - "pnpm-workspace.yaml"
+      - "pnpm-lock.yaml"
+      - "tsconfig.json"
+      - "tsconfig.base.json"
+      - ".github/workflows/docker-build.yml"
+
+permissions:
+  contents: read
+
+jobs:
+  docker-build:
+    name: Build & Smoke-test Docker image
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@v3
+
+      - name: Build Docker image
+        uses: docker/build-push-action@v6
+        with:
+          context: .
+          load: true
+          tags: void-app:ci
+          cache-from: type=gha,scope=docker-${{ github.ref_name }}
+          cache-to: type=gha,scope=docker-${{ github.ref_name }},mode=max
+
+      - name: Verify runtime user is non-root (fresh container)
+        run: |
+          # Regression guard for task #173 / audit §7.1: a misordered
+          # Dockerfile (moved CMD, added "USER root" debug line, new final
+          # stage, etc.) could silently re-elevate the API process to root
+          # even with "USER node" still present somewhere in the file.
+          # Override CMD with `id -un` so we read the *effective* runtime
+          # user the image would launch as.
+          USER_NAME=$(docker run --rm --entrypoint id void-app:ci -un)
+          echo "Image runtime user (fresh container): $USER_NAME"
+          if [ "$USER_NAME" != "node" ]; then
+            echo "::error::Production image runtime user is '$USER_NAME', expected 'node'."
+            echo "::error::The Dockerfile may have re-elevated to root. See docs/security-audit-public-2026-04.md §7.1."
+            exit 1
+          fi
+
+      - name: Start container
+        run: |
+          docker run -d \
+            --name void-ci \
+            -p 3000:3000 \
+            -e PORT=3000 \
+            -e NODE_ENV=production \
+            -e SERVE_STATIC=1 \
+            -e CLIENT_DIST=./client \
+            -e LIGHTNING_BACKEND=mock \
+            void-app:ci
+
+      - name: Wait for server to be ready
+        run: |
+          echo "Waiting for health endpoint on port 3000..."
+          for i in $(seq 1 30); do
+            if curl -sf http://localhost:3000/api/health | grep -q '"status":"ok"'; then
+              echo "Health check passed on attempt $i"
+              exit 0
+            fi
+            sleep 1
+          done
+          echo "Server did not become healthy within 30 seconds"
+          docker logs void-ci
+          exit 1
+
+      - name: Verify runtime user is non-root (live container)
+        run: |
+          # Belt-and-suspenders to the fresh-container check above: confirm
+          # the *actually running* server process — not just `id` — is owned
+          # by the `node` user. Catches a hypothetical entrypoint script
+          # that re-elevates via su/sudo at runtime.
+          EXEC_USER=$(docker exec void-ci id -un)
+          PS_USER=$(docker exec void-ci ps -o user= -p 1 | tr -d ' ')
+          echo "Live container id -un: $EXEC_USER"
+          echo "Live container PID 1 user: $PS_USER"
+          if [ "$EXEC_USER" != "node" ] || [ "$PS_USER" != "node" ]; then
+            echo "::error::Live container is running as '$EXEC_USER' (PID 1: '$PS_USER'), expected 'node'."
+            echo "::error::See docs/security-audit-public-2026-04.md §7.1."
+            docker logs void-ci
+            exit 1
+          fi
+
+      - name: Verify HTTP response
+        run: |
+          STATUS=$(curl -s -o /dev/null -w "%{http_code}" http://localhost:3000/api/health)
+          BODY=$(curl -s http://localhost:3000/api/health)
+          echo "HTTP status: $STATUS"
+          echo "Response body: $BODY"
+          if [ "$STATUS" -ne 200 ]; then
+            echo "Unexpected HTTP status code: $STATUS"
+            docker logs void-ci
+            exit 1
+          fi
+
+      - name: Print container logs
+        if: always()
+        run: docker logs void-ci 2>&1 || true
+
+      - name: Cleanup
+        if: always()
+        run: docker rm -f void-ci 2>/dev/null || true

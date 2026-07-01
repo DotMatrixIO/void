@@ -1,0 +1,20 @@
+{
+  "name": "@workspace/api-spec",
+  "version": "0.0.0",
+  "private": true,
+  "scripts": {
+    "codegen": "orval --config ./orval.config.ts && tsx ./generate-signaling-types.ts",
+    "smoke": "pnpm --filter @workspace/api-server run build && tsx ./scripts/smoke.ts",
+    "check-asyncapi": "node ./scripts/check-asyncapi-drift.mjs",
+    "check-overview-http": "node ./scripts/check-overview-http-drift.mjs",
+    "check-overview-asyncapi": "node ./scripts/check-overview-asyncapi-drift.mjs"
+  },
+  "devDependencies": {
+    "@types/node": "catalog:",
+    "@workspace/api-zod": "workspace:*",
+    "orval": "^8.5.2",
+    "tsx": "catalog:",
+    "yaml": "^2.8.3",
+    "zod": "catalog:"
+  }
+}

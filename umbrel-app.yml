@@ -1,0 +1,185 @@
+manifestVersion: 1
+id: void
+name: VOID
+tagline: Stateless, end-to-end encrypted P2P video over Lightning
+icon: https://raw.githubusercontent.com/DotMatrixIO/void/main/void-icon.png
+category: communication
+version: "1.2.0"
+port: 3000
+description: >-
+  VOID is a stateless, end-to-end encrypted peer-to-peer video
+  conferencing app. No accounts, no database, no logs. Rooms hold
+  up to 4 participants, expire automatically (65 minutes on the
+  standard tier, 24 hours on the day tier), and live in process
+  memory only — restart equals clean slate. The host pays a
+  Lightning invoice (1,000 sats on the standard tier) to create a
+  room and is issued a one-time 4-word BIP-39 recovery code so
+  the room can be reclaimed within the paid window after a tab
+  close. Joiners enter free using the room phrase, which is
+  shared via the URL fragment and never sent to the server. Media
+  flows browser-to-browser over WebRTC; an optional TURN relay
+  handles NAT traversal and IP hiding. The signaling server is
+  unable to decrypt session traffic (per-session ECDH P-384 with
+  Ed25519 signed-hello binding; AES-GCM payloads; argon2id
+  m=64 MiB / t=3 / p=1 phrase derivation). This distribution
+  ships the human video/audio product only — VOID is human-only;
+  all agent code has been removed.
+developer: DotMatrixIO
+# Website, submission, repo, and support URLs below are the canonical public-
+# repository URLs. They replaced the prior RFC 2606 reserved-domain
+# placeholders when the public repository was published; that placeholder->
+# canonical swap closed the only residual gap the StartOS / Umbrel manifest
+# review had tracked against these fields (the placeholder URLs had blocked
+# store submission until the public repo was live). The StartOS / Umbrel
+# manifest review and its re-eval trigger are documented in docs/security-audit-public-2026-04.md §11 (limitation 9).
+website: https://github.com/DotMatrixIO/void
+submitter: DotMatrixIO
+submission: https://github.com/DotMatrixIO/void
+repo: https://github.com/DotMatrixIO/void
+support: https://github.com/DotMatrixIO/void/issues
+gallery: []
+releaseNotes: >-
+  This release brings the Umbrel package up to the state of the
+  monorepo as of May 2026. Operators upgrading from 1.1.0 should
+  re-read the environment-variable expectations below — defaults
+  and startup guards have changed.
+
+
+  Security and resilience: trusted-proxy IP handling on Socket.io
+  (TRUST_PROXY_HOPS, default 1) so per-IP rate limits cannot be
+  bypassed by a spoofed leftmost X-Forwarded-For token; single-use
+  room-creation JWTs (the token now embeds the Lightning
+  paymentHash and is consumed on first use); signed-hello browser
+  handshake (per-session Ed25519 keys bind each ECDH public key
+  to a session identity and to the room ID, blocking cross-room
+  replay; failed verification tears the secure channel down
+  loudly instead of silently falling back); host-role binding
+  (the "first joiner becomes host" auto-promotion is removed —
+  host privileges only return to a phrase-holder whose JWT
+  carries a paymentHash recorded against the room); URL-fragment
+  hygiene on every leave path (history.replaceState, never
+  pushState, with a static test guarding against regression);
+  startup guards that refuse to boot if TURN_SECRET or
+  PAYWALL_SECRET is set to a known placeholder; container runs
+  as the non-root "node" user with CI guards on every build;
+  jwt.verify pinned to algorithms: ["HS256"]; Lightning
+  settlement → room-create timing jittered 10–60 seconds to
+  weaken passive payment-to-room correlation.
+
+
+  Browser-side hardening (no change to operator surface):
+  Sub-Resource Integrity on every script and stylesheet the
+  served HTML loads; reproducible builds for the void-client
+  bundle; CSP/HSTS preload posture cleaned up; encrypted-at-rest
+  host token in localStorage (HKDF-derived storage tag and
+  AES-GCM key from the room phrase).
+
+
+  Recovery and pricing: 4-word BIP-39 recovery code minted
+  alongside the host JWT at first paid-status confirmation,
+  single-use, never extends the paid window past its original
+  end. Standard tier remains 1,000 sats / 65-minute room TTL;
+  day tier covers a 24-hour paid window with the same per-room
+  semantics.
+
+
+  Documentation: in-app threat-model page now carries a
+  "BROWSER-LEVEL SURFACES" disclosure enumerating the six
+  runtime-inherited surfaces (DNS, system clipboard,
+  notifications, extension DOM access, WebRTC getStats,
+  managed-browser permission logging) that no app code can
+  mitigate. Internal and public security audits re-run
+  April–May 2026; the public summary is served at /audit. A
+  marketing-claims-audit doc tracks every load-bearing claim
+  against the code that backs it.
+
+
+  Env-var surface: LIGHTNING_BACKEND ("mock" / "lnbits" /
+  "btcpay"), PAYWALL_SECRET, LNBITS_URL, LNBITS_API_KEY,
+  BTCPAY_URL, BTCPAY_API_KEY, BTCPAY_STORE_ID, TURN_URL,
+  TURN_SECRET, TURN_CREDENTIAL_TTL (default 4500), STUN_URL,
+  TOR_ONLY (optional, default unset — set to 1 to activate the
+  onion-only runtime posture: /api/ice-servers omits any configured
+  STUN_URL so a STUN request cannot leak peer IPs to a clearnet
+  third party, the startup banner confirms the posture, and the
+  server warns if TURN_URL is not a turns: relay on a .onion host;
+  see README-selfhost.md §6b; the equivalent of the
+  StartOS Tor-only deployment switch on Umbrel is enabling Umbrel's
+  own per-app Tor exposure and not publishing the local-network
+  port, covered in README-selfhost.md §6a). Wording note (Task #238): when Umbrel's per-app Tor
+  exposure is enabled the package is .onion-reachable — the
+  signaling layer is fronted by a Tor hidden service. The Tor
+  reachability covers the signaling layer only; WebRTC media
+  still gathers ICE candidates on the user's underlying network
+  regardless of how the page loaded, so reachability via
+  .onion does not extend to the media path. The full caveat is
+  in ThreatModelPage "TOR AND THE MEDIA PATH" and
+  README-selfhost.md §6c.
+  TRUST_PROXY_HOPS (default 1), PAYWALL_JITTER_MIN_MS (default
+  10000) and PAYWALL_JITTER_MAX_MS (default 60000) bound the
+  random delay between Lightning settlement and room creation
+  (M-04 mitigation), PAYWALL_JITTER_DISABLE set to "1" turns the
+  delay off and should only be used if passive payment-to-room
+  timing correlation is not part of your threat model, LOG_LEVEL
+  (default "warn"), NODE_ENV (set to "production" for any public
+  deployment; non-production exposes a dev-pay endpoint that
+  settles mock invoices without payment).
+
+
+  Upgrade behavior (N → N+1, declared at the manifest layer so
+  the Umbrel upgrade-notification surface carries it to operators):
+  in-flight rooms terminate ephemerally on the process restart
+  the package upgrade triggers (room state is in-memory by design
+  — no database, no on-disk room state — so active peers see
+  signaling drop and rejoin a fresh room); PAYWALL_SECRET behavior
+  on restart — operator-set value persists across upgrades because
+  it lives in the operator's env not in any package-managed
+  volume, so JWTs minted before the upgrade remain valid for their
+  TTL; if PAYWALL_SECRET is unset a fresh ephemeral per-process
+  secret is generated on each start and pre-upgrade JWTs are
+  invalidated (hosts who lose their JWT but kept their 4-word
+  recovery code can re-mint against the original paymentHash for
+  the remaining paid window); TURN_SECRET on restart is the same
+  shape (operator-env managed, persists unless rotated; if rotated
+  as part of an upgrade, both Coturn's static-auth-secret and the
+  API server's TURN_SECRET must be updated together); no data
+  migration is performed and none is required (no schema, no
+  backfill, no format-conversion step).
+
+
+  Coturn configuration workflow (manifest-level reference; full
+  rationale in README-selfhost.md §4a): the package ships
+  `coturn/turnserver.conf.example` (the actual
+  `coturn/turnserver.conf` is gitignored to prevent shipping a
+  placeholder shared secret in the image). Operator workflow:
+  `cp coturn/turnserver.conf.example coturn/turnserver.conf`,
+  replace the placeholder `static-auth-secret` line with the
+  output of `openssl rand -hex 32`, and set the same value as
+  TURN_SECRET in the env. The API server's startup guard refuses
+  to boot if TURN_SECRET is set to one of the well-known
+  placeholder values shipped in the example file, so the workflow
+  fails closed if the secret-rotation step is skipped. On Umbrel
+  specifically, the recommended deployment is "VOID app on Umbrel,
+  Coturn on a public VPS" (see README-selfhost.md §6a) — Coturn
+  is therefore not packaged as a separate Umbrel app dependency,
+  and operators following the recommended split edit the VPS-side
+  Coturn config and set the matching TURN_SECRET in the Umbrel-side
+  VOID env.
+
+
+  Dependency hygiene: Tasks #242 and #251 picked up CVE bumps in
+  transitive dev-tool dependencies since 1.1.0. None affect the
+  production runtime image, but downstream packagers verifying
+  lockfile-complete CVE state should know the bumps landed.
+# Coturn is not packaged as a separate Umbrel app dependency. The
+# upstream docker-compose ships a Coturn service alongside VOID, but
+# Umbrel users typically run TURN on a public VPS rather than on a
+# home Umbrel box (TURN needs public UDP reachability and the relay
+# port range open to the internet, which most home networks do not
+# provide). The README-selfhost guide §6a covers the recommended
+# split. Operators who do not need TURN can leave TURN_URL unset and
+# the client will fall back to STUN-only.
+dependencies: []
+path: ""
+defaultUsername: ""
+defaultPassword: ""

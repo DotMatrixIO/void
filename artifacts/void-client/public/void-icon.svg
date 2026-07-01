@@ -1,0 +1,17 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 100 100" width="100" height="100">
+  <!-- Gold background -->
+  <rect width="100" height="100" fill="#E8A200"/>
+
+  <!-- Corner brackets (targeting reticle) in dark -->
+  <!-- Top-left -->
+  <polyline points="4,14 4,4 14,4" stroke="#14110D" stroke-width="5" fill="none" stroke-linecap="square"/>
+  <!-- Top-right -->
+  <polyline points="86,4 96,4 96,14" stroke="#14110D" stroke-width="5" fill="none" stroke-linecap="square"/>
+  <!-- Bottom-left -->
+  <polyline points="4,86 4,96 14,96" stroke="#14110D" stroke-width="5" fill="none" stroke-linecap="square"/>
+  <!-- Bottom-right -->
+  <polyline points="96,86 96,96 86,96" stroke="#14110D" stroke-width="5" fill="none" stroke-linecap="square"/>
+
+  <!-- Bold V shape in dark -->
+  <polygon points="18,22 34,22 50,68 66,22 82,22 50,84" fill="#14110D"/>
+</svg>

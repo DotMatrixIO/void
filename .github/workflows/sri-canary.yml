@@ -1,0 +1,617 @@
+# Out-of-band SRI canary against the live origin (task #498, extended
+# to two network paths in task #499).
+#
+# Why this exists
+# ---------------
+# The user-facing "Something is wrong with this page" overlay
+# (`artifacts/void-client/index.html` showIntegrityFailure) only fires
+# when a real user happens to load a broken bundle, and a compromised
+# page cannot be trusted to phone home about itself. An in-page
+# telemetry beacon would also contradict VOID's "no telemetry, no logs"
+# positioning. This workflow is the out-of-band counterpart: a
+# scheduled GHA job fetches the live deployed origin from a clean
+# runner, re-derives the SRI hashes of every linked asset, and cross-
+# checks them against `sw-known-hashes.json` and `/api/provenance.json`
+# served by the same origin. Detection works even when zero real users
+# have triggered the overlay.
+#
+# Why two network paths (task #499)
+# ---------------------------------
+# A single runner makes it possible for a targeted attacker who can
+# identify the runner's egress IP range to serve a clean bundle to that
+# range and a tampered bundle elsewhere. The runner would see a self-
+# consistent view (HTML, SW table and provenance all agreeing on the
+# *tampered* bytes from its vantage point) and miss the attack. This
+# workflow runs the canary from two independent network paths in
+# parallel and a follow-up `cross-check` job asserts they observed
+# byte-identical asset hashes per path. A divergence between paths is
+# itself a hard failure and opens an `sri-canary` issue tagged as a
+# targeted-edge incident — see cause #4 in
+# `docs/sri-canary-runbook.md`.
+#
+# Triggers
+# --------
+# - `workflow_run` after `release` completes successfully: closest
+#   thing to a post-deploy hook — catches CDN edges still serving the
+#   previous build's hashes after a deploy.
+# - `schedule` daily: catches drift between releases (cache poisoning,
+#   silent tamper, reverse-proxy rewrites).
+# - `workflow_dispatch`: on-demand check with an optional `origin`
+#   override.
+#
+# Configuration (opt-in via repository Variables)
+# -----------------------------------------------
+# - `vars.CANARY_TARGET_ORIGIN` — the https origin to probe,
+#   e.g. `https://void.example`. If unset, the job exits cleanly with
+#   a `::notice::` so forks and freshly-cloned repos don't get noisy.
+# - `vars.CANARY_SECONDARY_RUNS_ON` — runner label for the second
+#   network path. Defaults to `macos-latest`, which on GHA-hosted
+#   infrastructure has a different egress AS than `ubuntu-latest`
+#   (different cloud datacenters / IP ranges). Operators with a
+#   self-hosted runner on a residential ISP or a different cloud
+#   should set this to a *single* label that matches that runner
+#   (e.g. `residential` or `hetzner`). The value is passed to
+#   `runs-on:` as a string, so multi-label selection (the YAML
+#   array form like `[self-hosted, residential]`) is not supported
+#   via this variable — pin the secondary runner's labels so a
+#   single label uniquely identifies it.
+#
+# Failure behaviour
+# -----------------
+# Per-path script exit 1 (mismatch) or 2 (network/usage) fails that
+# path's matrix leg. The `cross-check` job additionally fails when the
+# two paths disagree on what bytes the origin served. Either failure
+# mode opens (or updates) an `sri-canary` GitHub issue — same
+# actions/github-script@v7 pattern as onion-smoke.yml. On the next
+# fully-green run the issue is auto-closed with a pointer to the green
+# run URL.
+
+name: sri-canary
+
+on:
+  workflow_run:
+    workflows: ["release"]
+    types: [completed]
+  schedule:
+    # 09:41 UTC daily. Off-the-hour to dodge GHA scheduler congestion,
+    # offset from onion-smoke (14:23 UTC) and pnpm-audit (13:17 UTC)
+    # so a slow scheduler doesn't collide them.
+    - cron: "41 9 * * *"
+  workflow_dispatch:
+    inputs:
+      origin:
+        description: "Override origin (e.g. https://void.example). Falls back to vars.CANARY_TARGET_ORIGIN."
+        required: false
+
+permissions:
+  contents: read
+  issues: write
+
+concurrency:
+  # Don't pile up parallel canaries against the same origin if a
+  # release lands while a scheduled run is in flight.
+  group: sri-canary
+  cancel-in-progress: false
+
+jobs:
+  canary:
+    name: "SRI canary (${{ matrix.path.name }})"
+    # Don't run after a release that itself failed — there is no new
+    # deploy to validate, and the noise would drown out the actual
+    # release-side failure.
+    if: ${{ github.event_name != 'workflow_run' || github.event.workflow_run.conclusion == 'success' }}
+    strategy:
+      # Independent paths must run independently — one path failing
+      # (or being unreachable from its egress) must not cancel the
+      # other, because the cross-check job needs both reports to be
+      # able to distinguish "path-specific outage" from "targeted
+      # edge attack".
+      fail-fast: false
+      matrix:
+        path:
+          - name: primary
+            runs_on: ubuntu-latest
+          - name: secondary
+            # Operators can override via vars.CANARY_SECONDARY_RUNS_ON
+            # to point at a self-hosted runner on a residential ISP or
+            # a different cloud. The default uses macos-latest which
+            # runs in a different GHA-hosted datacenter / egress AS
+            # than ubuntu-latest — weaker than a residential runner
+            # but still independent from ubuntu-latest's IP range.
+            runs_on: ${{ vars.CANARY_SECONDARY_RUNS_ON || 'macos-latest' }}
+    runs-on: ${{ matrix.path.runs_on }}
+    timeout-minutes: 5
+
+    steps:
+      - name: Resolve origin
+        id: resolve
+        env:
+          INPUT_ORIGIN: ${{ inputs.origin }}
+          VAR_ORIGIN: ${{ vars.CANARY_TARGET_ORIGIN }}
+        run: |
+          set -euo pipefail
+          ORIGIN="${INPUT_ORIGIN:-$VAR_ORIGIN}"
+          if [ -z "$ORIGIN" ]; then
+            echo "configured=no" >> "$GITHUB_OUTPUT"
+            echo "::notice::CANARY_TARGET_ORIGIN is not configured for this repository. Skipping the SRI canary. Set the repository Variable to opt in (see .github/workflows/sri-canary.yml header)."
+          else
+            echo "configured=yes" >> "$GITHUB_OUTPUT"
+            echo "origin=$ORIGIN" >> "$GITHUB_OUTPUT"
+            echo "Will canary ${ORIGIN} from path=${{ matrix.path.name }} on runner=${{ matrix.path.runs_on }}"
+          fi
+
+      - name: Checkout repository
+        if: steps.resolve.outputs.configured == 'yes'
+        uses: actions/checkout@v4
+
+      - name: Set up Node.js
+        if: steps.resolve.outputs.configured == 'yes'
+        uses: actions/setup-node@v4
+        with:
+          node-version: 22
+
+      - name: Run SRI canary against live origin
+        if: steps.resolve.outputs.configured == 'yes'
+        id: canary
+        env:
+          ORIGIN: ${{ steps.resolve.outputs.origin }}
+          # The script writes a JSON report with the (source, path,
+          # expected, actual) tuples for every mismatch so the
+          # follow-up step can embed them in the deduplicated issue.
+          SRI_CANARY_REPORT_PATH: ${{ github.workspace }}/sri-canary-report.json
+        run: |
+          set -euo pipefail
+          # The script is plain Node and reads no workspace deps, so we
+          # invoke it directly without `pnpm install` to keep the
+          # post-deploy turnaround under a minute.
+          echo "Invoking: node artifacts/void-client/scripts/sri-canary.mjs --origin=${ORIGIN}"
+          node artifacts/void-client/scripts/sri-canary.mjs --origin="${ORIGIN}"
+
+      - name: Upload canary report artifact
+        # always() so the cross-check job can pick up partial / failed
+        # reports too — we still want to compare "what each path
+        # observed" even if one path detected a self-consistent
+        # mismatch.
+        if: always() && steps.resolve.outputs.configured == 'yes'
+        uses: actions/upload-artifact@v4
+        with:
+          name: sri-canary-report-${{ matrix.path.name }}
+          path: sri-canary-report.json
+          if-no-files-found: ignore
+          retention-days: 30
+
+      - name: Open or update failure issue
+        if: failure() && steps.resolve.outputs.configured == 'yes' && steps.canary.outcome == 'failure'
+        uses: actions/github-script@v7
+        env:
+          ORIGIN: ${{ steps.resolve.outputs.origin }}
+          EVENT: ${{ github.event_name }}
+          PATH_NAME: ${{ matrix.path.name }}
+          RUNS_ON: ${{ matrix.path.runs_on }}
+          RUN_URL: ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}
+          REPORT_PATH: ${{ github.workspace }}/sri-canary-report.json
+        with:
+          script: |
+            const fs = require("fs");
+            const title = "sri-canary: SRI / provenance mismatch on live origin";
+            const marker = "<!-- sri-canary-failure -->";
+            const origin = process.env.ORIGIN;
+            const event = process.env.EVENT;
+            const pathName = process.env.PATH_NAME;
+            const runsOn = process.env.RUNS_ON;
+            const runUrl = process.env.RUN_URL;
+            const reportPath = process.env.REPORT_PATH;
+
+            // Load the canary's machine-readable report so the issue
+            // can carry the asset path / expected / actual tuples
+            // directly (task #498 acceptance: the diff travels with
+            // the deduplicated issue, not just the run logs).
+            let report = null;
+            try {
+              if (fs.existsSync(reportPath)) {
+                report = JSON.parse(fs.readFileSync(reportPath, "utf8"));
+              }
+            } catch (err) {
+              core.warning(`Could not parse ${reportPath}: ${err.message}`);
+            }
+
+            // Render the mismatch tuples as a Markdown table. Cap
+            // length at 20 rows so a worst-case "every asset changed"
+            // failure does not blow past GitHub's 65k-char issue-body
+            // limit; the full set is always available in the uploaded
+            // sri-canary-report artifact linked from the run page.
+            function renderDiff(rep) {
+              if (!rep || !Array.isArray(rep.mismatches) || rep.mismatches.length === 0) {
+                if (rep && Array.isArray(rep.messages) && rep.messages.length > 0) {
+                  return "Failure messages (no structured mismatches recorded):\n\n```\n" +
+                    rep.messages.join("\n") + "\n```";
+                }
+                return "_No machine-readable report was produced; see run logs for details._";
+              }
+              const rows = rep.mismatches;
+              const shown = rows.slice(0, 20);
+              const lines = [
+                `**Origin:** \`${rep.origin}\``,
+                `**Path:** \`${pathName}\` (runner: \`${runsOn}\`)`,
+                `**Observed assets:** ${rep.observedCount}`,
+                `**Mismatches:** ${rows.length}${rows.length > 20 ? " (showing first 20; full report in the `sri-canary-report` workflow artifact)" : ""}`,
+                "",
+                "| Source | Asset path | Expected SHA-384 | Actual SHA-384 |",
+                "| --- | --- | --- | --- |",
+                ...shown.map((m) =>
+                  `| ${m.source} | \`${m.path}\` | \`${m.expected}\` | \`${m.actual}\` |`
+                ),
+              ];
+              return lines.join("\n");
+            }
+
+            const diffBlock = renderDiff(report);
+
+            const body = [
+              marker,
+              `The out-of-band SRI canary against \`${origin}\` failed on path \`${pathName}\` (runner: \`${runsOn}\`, trigger: \`${event}\`).`,
+              "",
+              `Run: ${runUrl}`,
+              "",
+              "## Mismatch detail",
+              "",
+              diffBlock,
+              "",
+              "## Most-likely causes",
+              "",
+              "1. A CDN edge cached a stale build past a deploy — `sw-known-hashes.json` / `/api/provenance.json` describe the new bundle, but an edge is still serving the previous bundle's asset bytes (or vice versa).",
+              "2. A reverse proxy or WAF in front of the origin is rewriting asset bytes (HTML minification, script injection, byte-mangling middlebox).",
+              "3. Actual supply-chain tamper — asset bytes diverge from both the SW baseline and the build-time provenance.",
+              "4. Targeted edge attack against this path's egress range — check whether the *other* canary path passed (run page links both matrix legs); if so, this is cause #4 in the runbook.",
+              "",
+              "Operator runbook: `docs/sri-canary-runbook.md` walks through the four causes with the response for each.",
+            ].join("\n");
+
+            const { data: open } = await github.rest.issues.listForRepo({
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              state: "open",
+              labels: "sri-canary",
+              per_page: 100,
+            });
+            const existing = open.find((i) => i.body && i.body.includes(marker));
+            if (existing) {
+              const commentBody = [
+                `Still failing as of ${new Date().toISOString()} on path \`${pathName}\` (runner: \`${runsOn}\`).`,
+                "",
+                `Run: ${runUrl}`,
+                "",
+                "## Mismatch detail (this run)",
+                "",
+                diffBlock,
+              ].join("\n");
+              await github.rest.issues.createComment({
+                owner: context.repo.owner,
+                repo: context.repo.repo,
+                issue_number: existing.number,
+                body: commentBody,
+              });
+              core.notice(`Updated existing failure issue #${existing.number}.`);
+            } else {
+              const { data: created } = await github.rest.issues.create({
+                owner: context.repo.owner,
+                repo: context.repo.repo,
+                title,
+                body,
+                labels: ["sri-canary"],
+              });
+              core.notice(`Opened failure issue #${created.number}.`);
+            }
+
+  cross-check:
+    name: Cross-check observation agreement across paths
+    needs: canary
+    # Always run, even if a leg failed — disagreement between a
+    # failing leg and a passing leg is exactly the targeted-edge
+    # signal we want to surface. Skip only when the matrix itself
+    # was skipped (canary config absent).
+    if: ${{ always() && needs.canary.result != 'skipped' }}
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+
+    steps:
+      - name: Resolve configuration
+        id: resolve
+        env:
+          INPUT_ORIGIN: ${{ inputs.origin }}
+          VAR_ORIGIN: ${{ vars.CANARY_TARGET_ORIGIN }}
+        run: |
+          set -euo pipefail
+          ORIGIN="${INPUT_ORIGIN:-$VAR_ORIGIN}"
+          if [ -z "$ORIGIN" ]; then
+            echo "configured=no" >> "$GITHUB_OUTPUT"
+            echo "::notice::CANARY_TARGET_ORIGIN not configured — nothing to cross-check."
+          else
+            echo "configured=yes" >> "$GITHUB_OUTPUT"
+            echo "origin=$ORIGIN" >> "$GITHUB_OUTPUT"
+          fi
+
+      - name: Download primary report
+        if: steps.resolve.outputs.configured == 'yes'
+        uses: actions/download-artifact@v4
+        with:
+          name: sri-canary-report-primary
+          path: reports/primary
+        continue-on-error: true
+
+      - name: Download secondary report
+        if: steps.resolve.outputs.configured == 'yes'
+        uses: actions/download-artifact@v4
+        with:
+          name: sri-canary-report-secondary
+          path: reports/secondary
+        continue-on-error: true
+
+      - name: Diff observed hashes across paths
+        if: steps.resolve.outputs.configured == 'yes'
+        id: diff
+        env:
+          ORIGIN: ${{ steps.resolve.outputs.origin }}
+        run: |
+          set -euo pipefail
+          node <<'NODE'
+          const fs = require("node:fs");
+          const path = require("node:path");
+
+          function loadReport(p) {
+            const fp = path.join(p, "sri-canary-report.json");
+            if (!fs.existsSync(fp)) return null;
+            try {
+              return JSON.parse(fs.readFileSync(fp, "utf8"));
+            } catch (err) {
+              console.error(`[cross-check] could not parse ${fp}: ${err.message}`);
+              return null;
+            }
+          }
+
+          const primary = loadReport("reports/primary");
+          const secondary = loadReport("reports/secondary");
+
+          const out = {
+            origin: process.env.ORIGIN,
+            primaryPresent: !!primary,
+            secondaryPresent: !!secondary,
+            // Path-specific observations that disagree across paths.
+            // Each row: { path, primary, secondary }.
+            divergences: [],
+            // Paths present in one report but not the other (each
+            // path only fetches assets referenced by *its* observed
+            // index.html, so if /index.html itself diverges these
+            // sets will diverge too).
+            onlyPrimary: [],
+            onlySecondary: [],
+          };
+
+          if (!primary || !secondary) {
+            console.log(
+              "[cross-check] one or both reports missing; cannot assert agreement. " +
+                `primary=${!!primary} secondary=${!!secondary}`
+            );
+            // A missing report from a path that was supposed to run
+            // is a soft failure — it could be a network outage on
+            // that path's egress, or it could be that the path was
+            // selectively blocked. Either way we surface it but do
+            // not treat absence as a divergence (which would imply
+            // we *saw* differing bytes).
+            out.note =
+              "One or both per-path reports were missing. The canary cannot prove " +
+              "agreement without both observations. Re-run via workflow_dispatch; " +
+              "if a single path is reliably missing reports, check that runner's " +
+              "egress and the upload-artifact step's logs.";
+            fs.writeFileSync("cross-check-report.json", JSON.stringify(out, null, 2) + "\n");
+            // Exit 0 here — the per-leg matrix already failed if its
+            // own checks failed; we don't want to double-fire issues.
+            process.exit(0);
+          }
+
+          const primaryObs = (primary.observed && typeof primary.observed === "object") ? primary.observed : {};
+          const secondaryObs = (secondary.observed && typeof secondary.observed === "object") ? secondary.observed : {};
+
+          const allKeys = new Set([...Object.keys(primaryObs), ...Object.keys(secondaryObs)]);
+          for (const k of allKeys) {
+            const p = primaryObs[k];
+            const s = secondaryObs[k];
+            if (p === undefined) out.onlySecondary.push({ path: k, secondary: s });
+            else if (s === undefined) out.onlyPrimary.push({ path: k, primary: p });
+            else if (p !== s) out.divergences.push({ path: k, primary: p, secondary: s });
+          }
+
+          fs.writeFileSync("cross-check-report.json", JSON.stringify(out, null, 2) + "\n");
+
+          const total = out.divergences.length + out.onlyPrimary.length + out.onlySecondary.length;
+          if (total === 0) {
+            console.log(
+              `[cross-check] PASS — primary and secondary paths observed identical bytes for ` +
+                `${Object.keys(primaryObs).length} asset(s) on ${out.origin}`
+            );
+            process.exit(0);
+          }
+
+          console.error(`[cross-check] FAIL — ${out.divergences.length} per-asset divergence(s), ` +
+            `${out.onlyPrimary.length} primary-only path(s), ${out.onlySecondary.length} secondary-only path(s)`);
+          for (const d of out.divergences) {
+            console.error(`  diverge ${d.path}: primary=${d.primary} secondary=${d.secondary}`);
+          }
+          for (const p of out.onlyPrimary) console.error(`  only-primary ${p.path}: ${p.primary}`);
+          for (const s of out.onlySecondary) console.error(`  only-secondary ${s.path}: ${s.secondary}`);
+          process.exit(1);
+          NODE
+
+      - name: Upload cross-check report
+        if: always() && steps.resolve.outputs.configured == 'yes'
+        uses: actions/upload-artifact@v4
+        with:
+          name: sri-canary-cross-check
+          path: cross-check-report.json
+          if-no-files-found: ignore
+          retention-days: 30
+
+      - name: Open or update divergence issue
+        if: failure() && steps.resolve.outputs.configured == 'yes' && steps.diff.outcome == 'failure'
+        uses: actions/github-script@v7
+        env:
+          ORIGIN: ${{ steps.resolve.outputs.origin }}
+          EVENT: ${{ github.event_name }}
+          RUN_URL: ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}
+          REPORT_PATH: ${{ github.workspace }}/cross-check-report.json
+        with:
+          script: |
+            const fs = require("fs");
+            // Distinct marker from the per-path failure issue so the
+            // two surfaces dedupe independently — a targeted edge
+            // attack can coexist with a stale-CDN failure and each
+            // deserves its own incident thread.
+            const title = "sri-canary: paths disagree on served bytes (suspected targeted edge attack)";
+            const marker = "<!-- sri-canary-divergence -->";
+            const origin = process.env.ORIGIN;
+            const event = process.env.EVENT;
+            const runUrl = process.env.RUN_URL;
+            const reportPath = process.env.REPORT_PATH;
+
+            let report = null;
+            try {
+              if (fs.existsSync(reportPath)) {
+                report = JSON.parse(fs.readFileSync(reportPath, "utf8"));
+              }
+            } catch (err) {
+              core.warning(`Could not parse ${reportPath}: ${err.message}`);
+            }
+
+            function renderDiff(rep) {
+              if (!rep) return "_No cross-check report was produced; see run logs for details._";
+              const lines = [
+                `**Origin:** \`${rep.origin}\``,
+                `**Per-asset divergences:** ${rep.divergences.length}`,
+                `**Only seen by primary:** ${rep.onlyPrimary.length}`,
+                `**Only seen by secondary:** ${rep.onlySecondary.length}`,
+                "",
+              ];
+              if (rep.divergences.length > 0) {
+                lines.push("### Per-asset divergences (capped at 20)");
+                lines.push("");
+                lines.push("| Asset path | Primary SHA-384 | Secondary SHA-384 |");
+                lines.push("| --- | --- | --- |");
+                for (const d of rep.divergences.slice(0, 20)) {
+                  lines.push(`| \`${d.path}\` | \`${d.primary}\` | \`${d.secondary}\` |`);
+                }
+                lines.push("");
+              }
+              if (rep.onlyPrimary.length > 0) {
+                lines.push("### Only seen by primary path");
+                lines.push("");
+                for (const p of rep.onlyPrimary.slice(0, 20)) {
+                  lines.push(`- \`${p.path}\` — primary=\`${p.primary}\``);
+                }
+                lines.push("");
+              }
+              if (rep.onlySecondary.length > 0) {
+                lines.push("### Only seen by secondary path");
+                lines.push("");
+                for (const s of rep.onlySecondary.slice(0, 20)) {
+                  lines.push(`- \`${s.path}\` — secondary=\`${s.secondary}\``);
+                }
+                lines.push("");
+              }
+              return lines.join("\n");
+            }
+
+            const diffBlock = renderDiff(report);
+
+            const body = [
+              marker,
+              `The SRI canary's two network paths disagreed on the bytes served by \`${origin}\` (trigger: \`${event}\`).`,
+              "",
+              "Both paths individually passed their own self-consistency checks (HTML, SW table and provenance all agreed *within each path*) but observed **different bytes** for at least one asset. This is the signature of a targeted edge attack: an attacker serving clean bytes to one egress IP range and tampered bytes to another, fooling any single-runner canary into reporting green.",
+              "",
+              `Run: ${runUrl}`,
+              "",
+              "## Divergence detail",
+              "",
+              diffBlock,
+              "",
+              "## Response",
+              "",
+              "Follow cause #4 in `docs/sri-canary-runbook.md` — treat as an incident, take the deployment offline pending verification from additional independent vantage points, and check whether any CDN / edge config recently added IP-aware routing or A/B serving.",
+            ].join("\n");
+
+            const { data: open } = await github.rest.issues.listForRepo({
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              state: "open",
+              labels: "sri-canary",
+              per_page: 100,
+            });
+            const existing = open.find((i) => i.body && i.body.includes(marker));
+            if (existing) {
+              const commentBody = [
+                `Still diverging as of ${new Date().toISOString()}.`,
+                "",
+                `Run: ${runUrl}`,
+                "",
+                "## Divergence detail (this run)",
+                "",
+                diffBlock,
+              ].join("\n");
+              await github.rest.issues.createComment({
+                owner: context.repo.owner,
+                repo: context.repo.repo,
+                issue_number: existing.number,
+                body: commentBody,
+              });
+              core.notice(`Updated existing divergence issue #${existing.number}.`);
+            } else {
+              const { data: created } = await github.rest.issues.create({
+                owner: context.repo.owner,
+                repo: context.repo.repo,
+                title,
+                body,
+                labels: ["sri-canary"],
+              });
+              core.notice(`Opened divergence issue #${created.number}.`);
+            }
+
+      - name: Auto-close failure issues on fully-green run
+        # Only auto-close when *everything* is green — both per-path
+        # legs and the cross-check. A green cross-check with a red
+        # leg means one path is wedged but its observation still
+        # agreed with the other path's; closing the issue under
+        # those conditions would be wrong.
+        if: success() && steps.resolve.outputs.configured == 'yes' && needs.canary.result == 'success' && steps.diff.outcome == 'success'
+        uses: actions/github-script@v7
+        env:
+          RUN_URL: ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}
+        with:
+          script: |
+            const markers = [
+              "<!-- sri-canary-failure -->",
+              "<!-- sri-canary-divergence -->",
+            ];
+            const runUrl = process.env.RUN_URL;
+            const { data: open } = await github.rest.issues.listForRepo({
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              state: "open",
+              labels: "sri-canary",
+              per_page: 100,
+            });
+            for (const issue of open) {
+              if (!issue.body || !markers.some((m) => issue.body.includes(m))) continue;
+              await github.rest.issues.createComment({
+                owner: context.repo.owner,
+                repo: context.repo.repo,
+                issue_number: issue.number,
+                body: `Recovered. Most recent fully-green run (both paths + cross-check): ${runUrl}`,
+              });
+              await github.rest.issues.update({
+                owner: context.repo.owner,
+                repo: context.repo.repo,
+                issue_number: issue.number,
+                state: "closed",
+              });
+              core.notice(`Auto-closed recovered issue #${issue.number}.`);
+            }

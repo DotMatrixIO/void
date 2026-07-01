@@ -1,0 +1,136 @@
+kind = "web"
+previewPath = "/"
+title = "VOID Client"
+version = "1.0.0"
+id = "artifacts/gameboy-cam"
+router = "path"
+
+[[integratedSkills]]
+name = "react-vite"
+version = "1.0.0"
+
+[[services]]
+name = "web"
+paths = [ "/" ]
+localPort = 24363
+
+[services.development]
+run = "pnpm --filter @workspace/void-client run dev"
+
+[services.production]
+# OG_STRICT=1 turns gen-og-pages.mjs's missing-origin warning into a hard
+# build failure. We do this explicitly here (rather than relying on
+# NODE_ENV=production being forwarded to the build step) so production
+# deploys never silently ship relative og:image / og:url values, which
+# Facebook, X/Twitter, Slack, and iMessage would all reject — every
+# social card on every marketing route would render broken. See
+# artifacts/void-client/scripts/gen-og-pages.mjs for the strict-mode
+# contract. Local `pnpm build` runs without this flag and keeps the
+# legacy warn-and-continue behaviour.
+build = [ "env", "OG_STRICT=1", "pnpm", "--filter", "@workspace/void-client", "run", "build" ]
+publicDir = "artifacts/void-client/dist/public"
+serve = "static"
+
+# BEGIN GENERATED OG REWRITES
+# Per-route Open Graph HTML files — must come BEFORE the SPA catch-all so
+# crawlers (Facebook, Twitter/X, Slack, iMessage, WhatsApp) get the
+# route-specific og:* metadata for each marketing page rather than the
+# landing card. Real users get the same files; the SPA hydrates and behaves
+# identically because the body and script tags are byte-identical across
+# every HTML file. Both bare and trailing-slash forms are mapped so a
+# shared link like /compare/ doesn't accidentally fall through to the
+# SPA catch-all and serve the landing card. See
+# artifacts/void-client/scripts/gen-og-pages.mjs.
+# Edit og-routes.mjs and rebuild instead of touching this block by hand.
+[[services.production.rewrites]]
+from = "/why"
+to = "/why.html"
+
+[[services.production.rewrites]]
+from = "/why/"
+to = "/why.html"
+
+[[services.production.rewrites]]
+from = "/compare"
+to = "/compare.html"
+
+[[services.production.rewrites]]
+from = "/compare/"
+to = "/compare.html"
+
+[[services.production.rewrites]]
+from = "/threat-model"
+to = "/threat-model.html"
+
+[[services.production.rewrites]]
+from = "/threat-model/"
+to = "/threat-model.html"
+
+[[services.production.rewrites]]
+from = "/pricing"
+to = "/pricing.html"
+
+[[services.production.rewrites]]
+from = "/pricing/"
+to = "/pricing.html"
+
+[[services.production.rewrites]]
+from = "/biometric-masking"
+to = "/biometric-masking.html"
+
+[[services.production.rewrites]]
+from = "/biometric-masking/"
+to = "/biometric-masking.html"
+
+[[services.production.rewrites]]
+from = "/limits"
+to = "/limits.html"
+
+[[services.production.rewrites]]
+from = "/limits/"
+to = "/limits.html"
+
+[[services.production.rewrites]]
+from = "/invited"
+to = "/invited.html"
+
+[[services.production.rewrites]]
+from = "/invited/"
+to = "/invited.html"
+
+[[services.production.rewrites]]
+from = "/host"
+to = "/host.html"
+
+[[services.production.rewrites]]
+from = "/host/"
+to = "/host.html"
+
+[[services.production.rewrites]]
+from = "/tor"
+to = "/tor.html"
+
+[[services.production.rewrites]]
+from = "/tor/"
+to = "/tor.html"
+
+[[services.production.rewrites]]
+from = "/law-enforcement"
+to = "/law-enforcement.html"
+
+[[services.production.rewrites]]
+from = "/law-enforcement/"
+to = "/law-enforcement.html"
+
+[[services.production.rewrites]]
+from = "/*"
+to = "/index.html"
+# END GENERATED OG REWRITES
+
+
+
+
+
+[services.env]
+PORT = "24363"
+BASE_PATH = "/"

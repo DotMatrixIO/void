@@ -1,0 +1,35 @@
+#### What we currently write to disk
+
+The relay keeps the bare minimum it takes to run a public service. Two things touch disk, with two different ceilings: short-lived **operational logs** (rotated out within five days) and a small **room-state snapshot** that lets paid rooms survive a restart (kept only until the room's paid window expires). This is the canonical disk inventory — the page surfaces that publish a disk policy import it verbatim so they cannot drift from one another or from the access logger in `artifacts/api-server/src/lib/accessLog.ts` and the room-state persistence in `artifacts/api-server/src/roomsPersistence.ts`.
+
+**LOGS — KEPT, ROTATED OUT WITHIN 5 DAYS**
+
+- Timestamp, client IP (used by the per-IP rate limiter), HTTP method, path, and status code for each request.
+- Socket.io connection lifecycle events — a connect, a join, a leave, a disconnect, and the per-IP open-connection count at the time.
+- The 32-character hex room ID on *error-path* lines only (4xx, 5xx, malformed-code rejections) so an operator triaging a real client error can correlate it with the room that failed.
+- A short, non-reversible **digest** of the Lightning `paymentHash` — the first 12 hex characters of its SHA-256 — in place of the raw value wherever a payment identifier would otherwise reach a log line: on the two server-side `warn`-level paths (when the Lightning backend is unreachable on `/paywall/status`, and when a settled invoice has no in-memory tier mapping after a restart between invoice creation and settlement), and in the `info`-level HTTP access line, where the `paymentHash` appears as a path segment on `/paywall/status/:paymentHash` and is scrubbed to the same digest on **every** status code, by path position — so it covers the 64-hex hash of the default Lightning backend as well as a BTCPay backend's own identifier shape. The `warn` paths are on by default (`warn` log level); the access line needs `LOG_LEVEL=info`. The raw `paymentHash` is **never** written to a log. The digest lets an operator line up log lines about the same payment; note it is an *unkeyed* hash, so a party who already holds candidate payment hashes (for example a Lightning backend's own settlement records) can hash those and match the prefix — the digest removes the raw value and preserves triage, it does not by itself defeat a holder of the settlement set. Like everything in this bucket these rotate out within five days. (The room-state snapshot's `hostReclaimTokenHashes` below stores a *keyed* HMAC of a per-room **reclaim token** that is decoupled from the `paymentHash` entirely — so nothing payment-derived is written to disk in either bucket.)
+
+**ROOM-STATE SNAPSHOT — KEPT UNTIL THE ROOM'S PAID WINDOW EXPIRES**
+
+To survive a `SIGTERM` → restart cycle (or a crash) without stranding paying hosts, the relay persists a minimal per-room record to a JSON file (`data/rooms.json` by default, overridable via `ROOM_STATE_FILE`). It is written debounced on every room mutation, flushed synchronously on shutdown, and rehydrated at startup. For each room that has not yet expired it stores:
+
+- The 32-character hex room code, its `createdAt` / `expiresAt` instants, the paid `tier` and `roomType`, the `relayOnly` privacy flag, and the `locked` moderation flag.
+- `hostReclaimTokenHashes` — the set of host **reclaim tokens** entitled to reclaim host on rejoin, each stored as a **keyed HMAC** (`HMAC(PAYWALL_SECRET, reclaimToken)`), never the raw value. A reclaim token is a fresh per-paid-window random 32-byte value minted alongside the host-authorization JWT and decoupled from the Lightning `paymentHash` entirely — it is the *only* host-claim secret the room persists, and it carries no payment linkage. Reclaim HMACs the rejoining host's `reclaimToken` and compares; a stable `PAYWALL_SECRET` is required for it to work across a restart, which is the same precondition reclaim already had (the host-authorization JWT is verified under the same secret). Because nothing payment-derived is stored, a holder of a seized snapshot file — **even one who also holds `PAYWALL_SECRET`** — cannot correlate a room code against a Lightning backend's settlement records. (The JWT still carries the raw `paymentHash` to the client for the in-memory single-use replay guard, but that value never reaches disk.)
+
+Volatile per-socket state — socket IDs, peer IDs, pending knocks, knock-mode, and screen-share reservations — is **never** persisted; it dies with the sockets and peers reconnect after a restart.
+
+**NEVER KEPT**
+
+- The six-word VOID Phrase. It is carried in the URL fragment and never sent to the server in the first place — there is nothing for the log to omit.
+- WebRTC signaling payloads (SDP, ICE candidates). They pass through the relay end-to-end encrypted and are not written to disk.
+- The 32-character hex room ID on *success-path* access lines and on success-path socket lifecycle lines. Where it would otherwise appear, the logger writes `<room-id>` in its place. This is enforced by tests on the access-log middleware and the socket lifecycle logger; remove the scrub and the build fails.
+- Screen-share lifecycle events (`request-screen-share`, `screen-share-started`, `screen-share-stopped`). These are server-arbitrated envelopes — the relay sees them live, on the wire, but does not persist them under the current logger.
+- Lock/unlock and knock-mode events. Same shape — server sees them live, does not persist.
+- Per-peer **camera / mic / voice-mask / Tor-origin state.** As of Task #868 this no longer transits the server at all: it rides the per-peer `void.media-state` WebRTC data channel (DTLS-over-SCTP), so the relay neither sees it on the wire nor has anything to persist. It is listed here only to be explicit that the old plaintext `peer-media-state` broadcast is gone — not merely un-logged, but off the server path entirely.
+
+**RETENTION CEILINGS**
+
+- **Logs:** five days. The production box enforces it with `logrotate` (see `deploy/logrotate.d/void` in the source tree). Self-hosters who use `journald` instead set `MaxRetentionSec=5day` — same ceiling, different file.
+- **Room-state snapshot:** the room's own paid TTL — at most 65 minutes (standard) or 24 hours (day tier). Expired records are skipped on rehydrate; the file is compacted within five minutes of a room aging out, and deleted entirely at startup when no room survives. This is a *shorter* ceiling than the log rotation, not a longer one.
+
+**Framing — this list is not the live-observable list.** Server-visible room-routing events are not automatically equivalent to disk artifacts. The live-observable bucket (the §3.5 server-observable fragment) lists everything the server can in principle see while a room is up; this bucket lists what actually ends up on disk under the current operator configuration. An operator who modifies the logger, an attacker who compromises the running process, or a passive observer of the wire can capture everything in the live-observable bucket whether or not it ever reaches a file here.

@@ -1,0 +1,499 @@
+# Automated post-deploy smoke for the Onion-Location header on the live
+# clearnet origin (task #423). This is the automated counterpart to the
+# manual gate documented in the internal launch checklist (§16) and the operator
+# instructions in docs/onion-mirror-runbook.md "Verifying the mirror is
+# reachable".
+#
+# Why this exists
+# ---------------
+# The smoke script in artifacts/api-server/scripts/smoke-onion-location.mjs
+# (task #390) proves the deployed origin is actually advertising its
+# `.onion` mirror. The unit tests in
+# artifacts/api-server/src/__tests__/onion-location.test.ts pin the
+# middleware's behaviour against a synthetic hostname inside the
+# api-server process — by construction they cannot catch "we shipped the
+# middleware but ONION_HOSTNAME got dropped from the production secrets
+# in the last rotation". This workflow runs the smoke against the live
+# origin so a future secret rotation that drops ONION_HOSTNAME fails
+# loudly instead of degrading silently between releases.
+#
+# Two jobs run off the same triggers and the same opt-in Variables:
+#   - `smoke` proves the clearnet origin is *advertising* an `.onion`
+#     (runs smoke:onion-location, no Tor needed).
+#   - `reachable` proves the advertised `.onion` is *actually reachable*
+#     end to end: it installs and bootstraps Tor on the runner, then runs
+#     smoke:onion-reachable, which dials the advertised address over the
+#     local Tor SOCKS proxy and asserts /api/health returns 200 with the
+#     same body the clearnet origin serves. The location smoke alone
+#     cannot catch a stale ONION_HOSTNAME left pointing at a hidden
+#     service that was rotated or taken down — that address is still
+#     advertised, just dead. The reachability job closes that gap.
+#
+#     smoke:onion-reachable SKIPs (exit 0) when no Tor SOCKS port is
+#     reachable, so a runner where Tor failed to start would pass
+#     silently. The `reachable` job therefore waits for Tor to reach
+#     100% bootstrap and FAILS the job if it does not, before running the
+#     smoke — port-open alone is not enough, Tor opens the SOCKS port
+#     before it can build circuits.
+#
+# Triggers
+# --------
+# - `workflow_run` after `release` completes successfully: the closest
+#   thing we have to a post-deploy hook. Operators publish a tag, the
+#   release workflow builds and signs the artifacts, the operator (or
+#   their deploy automation) rolls the new image, and this workflow runs
+#   against the live origin shortly after. Catches misconfiguration
+#   during the deploy window itself.
+# - `schedule` daily: catches drift between releases — e.g. an operator
+#   rotates secrets out of band, the `.onion` key is restored from an
+#   old backup, a reverse-proxy config change strips the header. The
+#   per-release trigger alone would only catch issues introduced at
+#   release time.
+# - `workflow_dispatch`: lets an operator run the smoke on demand after
+#   a manual deploy or to validate a rollback, with optional inputs that
+#   override the configured origin / expected hostname for one run.
+#
+# Configuration (opt-in via repository Variables)
+# -----------------------------------------------
+# - `vars.SMOKE_ONION_ORIGIN` — the clearnet https origin to probe,
+#   e.g. `https://void.example`. If unset, the job exits cleanly with a
+#   log line — self-hosters and forks should not see spurious failures
+#   just because they haven't published their origin to GitHub. This is
+#   the same opt-in shape used by AUDIT_WEBHOOK_URL in pnpm-audit.yml.
+# - `vars.SMOKE_ONION_EXPECT_HOSTNAME` — optional. If set, the smoke
+#   asserts the served Onion-Location hostname exactly equals this
+#   value. Catches silent rotations of the `.onion` address; intentional
+#   rotations require updating this variable in the same PR that
+#   updates the deployment's ONION_HOSTNAME secret.
+# - `vars.SMOKE_ONION_PATHS` — optional, comma-separated list of paths
+#   to probe (defaults to `/api/health` if unset). Operators who serve
+#   the mirror only on a subset of routes can narrow it here.
+#
+# Failure behaviour
+# -----------------
+# Each smoke step fails the workflow on a missing/malformed header or a
+# stale/unreachable mirror (script exit 1) or on a network/usage failure
+# against the origin (script exit 2). On any failure, a follow-up step
+# opens (or updates) a GitHub issue labelled `onion-smoke` so the on-call
+# sees the regression in the issue tracker, not just in the workflow-run
+# list. On the next successful run that issue is auto-closed with a
+# comment pointing at the green run. The two jobs track separate issues
+# (distinct hidden markers) so a passing location smoke does not close an
+# open reachability regression and vice versa.
+#
+# A `reachable`-job failure that is the runner's own fault — Tor never
+# finished bootstrapping — fails the job loudly but deliberately does
+# *not* open an onion-smoke issue: that is runner infrastructure noise,
+# not a regression in the deployed mirror.
+
+name: onion-smoke
+
+on:
+  workflow_run:
+    workflows: ["release"]
+    types: [completed]
+  schedule:
+    # 14:23 UTC daily. Off-the-hour to dodge GHA scheduler congestion,
+    # offset from pnpm-audit.yml (13:17) so a slow scheduler doesn't
+    # collide them.
+    - cron: "23 14 * * *"
+  workflow_dispatch:
+    inputs:
+      origin:
+        description: "Override clearnet origin (e.g. https://void.example). Falls back to vars.SMOKE_ONION_ORIGIN."
+        required: false
+      expect_hostname:
+        description: "Override expected .onion hostname. Falls back to vars.SMOKE_ONION_EXPECT_HOSTNAME."
+        required: false
+
+permissions:
+  contents: read
+  issues: write
+
+concurrency:
+  # Don't pile up parallel smokes against the same origin if a release
+  # lands while a scheduled run is in flight.
+  group: onion-smoke
+  cancel-in-progress: false
+
+jobs:
+  smoke:
+    name: Smoke Onion-Location against live origin
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    # Don't run after a release that itself failed — there is no new
+    # deploy to validate, and the noise would drown out the actual
+    # release-side failure.
+    if: ${{ github.event_name != 'workflow_run' || github.event.workflow_run.conclusion == 'success' }}
+
+    steps:
+      - name: Resolve origin and expected hostname
+        id: resolve
+        env:
+          INPUT_ORIGIN: ${{ inputs.origin }}
+          INPUT_EXPECT_HOSTNAME: ${{ inputs.expect_hostname }}
+          VAR_ORIGIN: ${{ vars.SMOKE_ONION_ORIGIN }}
+          VAR_EXPECT_HOSTNAME: ${{ vars.SMOKE_ONION_EXPECT_HOSTNAME }}
+          VAR_PATHS: ${{ vars.SMOKE_ONION_PATHS }}
+        run: |
+          set -euo pipefail
+          ORIGIN="${INPUT_ORIGIN:-$VAR_ORIGIN}"
+          EXPECT_HOSTNAME="${INPUT_EXPECT_HOSTNAME:-$VAR_EXPECT_HOSTNAME}"
+          PATHS="${VAR_PATHS:-/api/health}"
+          if [ -z "$ORIGIN" ]; then
+            echo "configured=no" >> "$GITHUB_OUTPUT"
+            echo "::notice::SMOKE_ONION_ORIGIN is not configured for this repository. Skipping the live-origin smoke. Set the repository Variable to opt in (see .github/workflows/onion-smoke.yml header)."
+          else
+            echo "configured=yes" >> "$GITHUB_OUTPUT"
+            echo "origin=$ORIGIN" >> "$GITHUB_OUTPUT"
+            echo "expect_hostname=$EXPECT_HOSTNAME" >> "$GITHUB_OUTPUT"
+            echo "paths=$PATHS" >> "$GITHUB_OUTPUT"
+            echo "Will smoke ${ORIGIN} on paths: ${PATHS}"
+            if [ -n "$EXPECT_HOSTNAME" ]; then
+              echo "Will pin Onion-Location hostname to: ${EXPECT_HOSTNAME}"
+            fi
+          fi
+
+      - name: Checkout repository
+        if: steps.resolve.outputs.configured == 'yes'
+        uses: actions/checkout@v4
+
+      - name: Set up Node.js
+        if: steps.resolve.outputs.configured == 'yes'
+        uses: actions/setup-node@v4
+        with:
+          node-version: 22
+
+      - name: Run smoke-onion-location against live origin
+        if: steps.resolve.outputs.configured == 'yes'
+        id: smoke
+        env:
+          ORIGIN: ${{ steps.resolve.outputs.origin }}
+          EXPECT_HOSTNAME: ${{ steps.resolve.outputs.expect_hostname }}
+          PATHS: ${{ steps.resolve.outputs.paths }}
+        run: |
+          set -euo pipefail
+          # The script is plain Node and reads no workspace deps, so we
+          # invoke it directly without `pnpm install` to keep the
+          # post-deploy turnaround under a minute.
+          ARGS=( "--origin=${ORIGIN}" )
+          IFS=',' read -ra PATH_LIST <<< "$PATHS"
+          for p in "${PATH_LIST[@]}"; do
+            # Trim accidental whitespace from comma-split entries.
+            trimmed="$(echo "$p" | tr -d '[:space:]')"
+            if [ -n "$trimmed" ]; then
+              ARGS+=( "--path=${trimmed}" )
+            fi
+          done
+          if [ -n "$EXPECT_HOSTNAME" ]; then
+            ARGS+=( "--expect-hostname=${EXPECT_HOSTNAME}" )
+          fi
+          echo "Invoking: node artifacts/api-server/scripts/smoke-onion-location.mjs ${ARGS[*]}"
+          node artifacts/api-server/scripts/smoke-onion-location.mjs "${ARGS[@]}"
+
+      - name: Open or update failure issue
+        if: failure() && steps.resolve.outputs.configured == 'yes' && steps.smoke.outcome == 'failure'
+        uses: actions/github-script@v7
+        env:
+          ORIGIN: ${{ steps.resolve.outputs.origin }}
+          EVENT: ${{ github.event_name }}
+          RUN_URL: ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}
+        with:
+          script: |
+            const title = "onion-smoke: Onion-Location regression on live origin";
+            const marker = "<!-- onion-smoke-failure -->";
+            const origin = process.env.ORIGIN;
+            const event = process.env.EVENT;
+            const runUrl = process.env.RUN_URL;
+            const body = [
+              marker,
+              `The post-deploy smoke against \`${origin}\` failed (trigger: \`${event}\`).`,
+              "",
+              `Run: ${runUrl}`,
+              "",
+              "Most-likely causes, in rough order of how often they bite:",
+              "1. `ONION_HOSTNAME` was dropped from the production environment in the last secret rotation.",
+              "2. A reverse proxy in front of the API is stripping the `Onion-Location` response header.",
+              "3. The `.onion` hostname configured in `vars.SMOKE_ONION_EXPECT_HOSTNAME` no longer matches what the deployment is serving (intentional rotation? Update the variable in the same PR).",
+              "4. The deployed origin is unreachable from GitHub-hosted runners.",
+              "",
+              "Operator runbook: `docs/onion-mirror-runbook.md` → \"Verifying the mirror is reachable\". Manual gate doc: the internal launch checklist (§16).",
+            ].join("\n");
+            const { data: open } = await github.rest.issues.listForRepo({
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              state: "open",
+              labels: "onion-smoke",
+              per_page: 100,
+            });
+            const existing = open.find((i) => i.body && i.body.includes(marker));
+            if (existing) {
+              await github.rest.issues.createComment({
+                owner: context.repo.owner,
+                repo: context.repo.repo,
+                issue_number: existing.number,
+                body: `Still failing as of ${new Date().toISOString()}.\n\nRun: ${runUrl}`,
+              });
+              core.notice(`Updated existing failure issue #${existing.number}.`);
+            } else {
+              const { data: created } = await github.rest.issues.create({
+                owner: context.repo.owner,
+                repo: context.repo.repo,
+                title,
+                body,
+                labels: ["onion-smoke"],
+              });
+              core.notice(`Opened failure issue #${created.number}.`);
+            }
+
+      - name: Auto-close failure issue on green run
+        if: success() && steps.resolve.outputs.configured == 'yes' && steps.smoke.outcome == 'success'
+        uses: actions/github-script@v7
+        env:
+          RUN_URL: ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}
+        with:
+          script: |
+            const marker = "<!-- onion-smoke-failure -->";
+            const runUrl = process.env.RUN_URL;
+            const { data: open } = await github.rest.issues.listForRepo({
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              state: "open",
+              labels: "onion-smoke",
+              per_page: 100,
+            });
+            for (const issue of open) {
+              if (!issue.body || !issue.body.includes(marker)) continue;
+              await github.rest.issues.createComment({
+                owner: context.repo.owner,
+                repo: context.repo.repo,
+                issue_number: issue.number,
+                body: `Recovered. Most recent green run: ${runUrl}`,
+              });
+              await github.rest.issues.update({
+                owner: context.repo.owner,
+                repo: context.repo.repo,
+                issue_number: issue.number,
+                state: "closed",
+              });
+              core.notice(`Auto-closed recovered failure issue #${issue.number}.`);
+            }
+
+  reachable:
+    name: Smoke .onion reachability over Tor
+    runs-on: ubuntu-latest
+    # Tor cold-start (descriptor fetch + circuit build) plus the smoke can
+    # take a few minutes on a fresh runner, so this is roomier than the
+    # location job's 5-minute budget.
+    timeout-minutes: 15
+    # Same guard as the location job: don't run after a release that
+    # itself failed.
+    if: ${{ github.event_name != 'workflow_run' || github.event.workflow_run.conclusion == 'success' }}
+
+    steps:
+      - name: Resolve origin and expected hostname
+        id: resolve
+        env:
+          INPUT_ORIGIN: ${{ inputs.origin }}
+          INPUT_EXPECT_HOSTNAME: ${{ inputs.expect_hostname }}
+          VAR_ORIGIN: ${{ vars.SMOKE_ONION_ORIGIN }}
+          VAR_EXPECT_HOSTNAME: ${{ vars.SMOKE_ONION_EXPECT_HOSTNAME }}
+          VAR_PATHS: ${{ vars.SMOKE_ONION_PATHS }}
+        run: |
+          set -euo pipefail
+          ORIGIN="${INPUT_ORIGIN:-$VAR_ORIGIN}"
+          EXPECT_HOSTNAME="${INPUT_EXPECT_HOSTNAME:-$VAR_EXPECT_HOSTNAME}"
+          # smoke:onion-reachable probes a single path and compares the
+          # .onion body byte-for-byte against the clearnet body, so it
+          # takes one --path rather than the location job's list. Use the
+          # first configured path (or /api/health).
+          PATHS="${VAR_PATHS:-/api/health}"
+          PROBE_PATH="$(echo "$PATHS" | cut -d',' -f1 | tr -d '[:space:]')"
+          [ -n "$PROBE_PATH" ] || PROBE_PATH="/api/health"
+          if [ -z "$ORIGIN" ]; then
+            echo "configured=no" >> "$GITHUB_OUTPUT"
+            echo "::notice::SMOKE_ONION_ORIGIN is not configured for this repository. Skipping the .onion reachability smoke. Set the repository Variable to opt in (see .github/workflows/onion-smoke.yml header)."
+          else
+            echo "configured=yes" >> "$GITHUB_OUTPUT"
+            echo "origin=$ORIGIN" >> "$GITHUB_OUTPUT"
+            echo "expect_hostname=$EXPECT_HOSTNAME" >> "$GITHUB_OUTPUT"
+            echo "probe_path=$PROBE_PATH" >> "$GITHUB_OUTPUT"
+            echo "Will dial the .onion advertised by ${ORIGIN} and probe ${PROBE_PATH} over Tor"
+            if [ -n "$EXPECT_HOSTNAME" ]; then
+              echo "Will pin Onion-Location hostname to: ${EXPECT_HOSTNAME}"
+            fi
+          fi
+
+      - name: Checkout repository
+        if: steps.resolve.outputs.configured == 'yes'
+        uses: actions/checkout@v4
+
+      - name: Set up pnpm
+        if: steps.resolve.outputs.configured == 'yes'
+        uses: pnpm/action-setup@v4
+
+      - name: Set up Node.js
+        if: steps.resolve.outputs.configured == 'yes'
+        uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: pnpm
+
+      - name: Install dependencies
+        if: steps.resolve.outputs.configured == 'yes'
+        run: pnpm install --frozen-lockfile
+
+      - name: Install and start Tor
+        if: steps.resolve.outputs.configured == 'yes'
+        run: |
+          set -euo pipefail
+          sudo apt-get update
+          sudo apt-get install -y tor
+          # Run our own tor instance with a known SOCKS port and a log
+          # file we can poll for the bootstrap milestone. Stop any service
+          # the package auto-started first so it cannot race us for 9050.
+          sudo service tor stop || true
+          mkdir -p /tmp/tor-data
+          # Tor refuses to start if the DataDirectory is group/world
+          # accessible.
+          chmod 700 /tmp/tor-data
+          {
+            echo "SocksPort 127.0.0.1:9050"
+            echo "DataDirectory /tmp/tor-data"
+            echo "Log notice file /tmp/tor.log"
+          } > /tmp/torrc
+          tor -f /tmp/torrc &
+          echo "$!" > /tmp/tor.pid
+          echo "Started tor (pid $(cat /tmp/tor.pid)); waiting for bootstrap in the next step."
+
+      - name: Wait for Tor to bootstrap
+        if: steps.resolve.outputs.configured == 'yes'
+        run: |
+          set -euo pipefail
+          # smoke:onion-reachable SKIPs (exit 0) when no SOCKS port is
+          # reachable, so a runner where Tor failed to start would pass
+          # silently. Gate the smoke on Tor actually reaching 100%
+          # bootstrap — a listening SOCKS port alone is not enough, Tor
+          # opens it before it can build circuits.
+          for _ in $(seq 1 60); do
+            if grep -q "Bootstrapped 100% (done)" /tmp/tor.log 2>/dev/null; then
+              echo "Tor bootstrapped to 100%."
+              exit 0
+            fi
+            sleep 5
+          done
+          echo "::error::Tor did not finish bootstrapping within ~5 minutes; refusing to run the reachability smoke because it would SKIP (exit 0) with no working Tor and pass silently."
+          echo "----- tail of /tmp/tor.log -----"
+          tail -n 80 /tmp/tor.log 2>/dev/null || echo "(no tor log)"
+          exit 1
+
+      - name: Run smoke-onion-reachable over Tor
+        if: steps.resolve.outputs.configured == 'yes'
+        id: smoke
+        env:
+          ORIGIN: ${{ steps.resolve.outputs.origin }}
+          EXPECT_HOSTNAME: ${{ steps.resolve.outputs.expect_hostname }}
+          PROBE_PATH: ${{ steps.resolve.outputs.probe_path }}
+        run: |
+          set -euo pipefail
+          ARGS=( "--origin=${ORIGIN}" "--path=${PROBE_PATH}" "--socks=127.0.0.1:9050" )
+          if [ -n "$EXPECT_HOSTNAME" ]; then
+            ARGS+=( "--expect-hostname=${EXPECT_HOSTNAME}" )
+          fi
+          echo "Invoking: pnpm --filter @workspace/api-server run smoke:onion-reachable -- ${ARGS[*]}"
+          pnpm --filter @workspace/api-server run smoke:onion-reachable -- "${ARGS[@]}"
+
+      - name: Stop Tor
+        if: always() && steps.resolve.outputs.configured == 'yes'
+        run: |
+          if [ -f /tmp/tor.pid ]; then
+            kill "$(cat /tmp/tor.pid)" 2>/dev/null || true
+          fi
+
+      - name: Open or update failure issue
+        if: failure() && steps.resolve.outputs.configured == 'yes' && steps.smoke.outcome == 'failure'
+        uses: actions/github-script@v7
+        env:
+          ORIGIN: ${{ steps.resolve.outputs.origin }}
+          EVENT: ${{ github.event_name }}
+          RUN_URL: ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}
+        with:
+          script: |
+            const title = "onion-smoke: .onion mirror unreachable over Tor";
+            const marker = "<!-- onion-smoke-reachable-failure -->";
+            const origin = process.env.ORIGIN;
+            const event = process.env.EVENT;
+            const runUrl = process.env.RUN_URL;
+            const body = [
+              marker,
+              `The end-to-end reachability smoke for the \`.onion\` advertised by \`${origin}\` failed (trigger: \`${event}\`).`,
+              "",
+              `Run: ${runUrl}`,
+              "",
+              "This job dials the advertised mirror over Tor and asserts `/api/health` returns 200 with the same body the clearnet origin serves. Most-likely causes, in rough order of how often they bite:",
+              "1. `ONION_HOSTNAME` still advertises a hidden service that was rotated or taken down — the address is advertised but dead. (The location smoke cannot catch this; that is why this job exists.)",
+              "2. The hidden service descriptor is not published (Tor daemon down on the host, or `HiddenServicePort` target pointing at the wrong loopback port).",
+              "3. The `.onion` is reachable but serves a different body than the clearnet origin — it is fronting a different backend.",
+              "4. `vars.SMOKE_ONION_EXPECT_HOSTNAME` no longer matches the served address (intentional rotation? Update the variable in the same PR).",
+              "",
+              "Operator runbook: `docs/onion-mirror-runbook.md` → \"Verifying the mirror is reachable\" (see the `smoke:onion-reachable` subsection). Manual gate doc: the internal launch checklist (§16).",
+            ].join("\n");
+            const { data: open } = await github.rest.issues.listForRepo({
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              state: "open",
+              labels: "onion-smoke",
+              per_page: 100,
+            });
+            const existing = open.find((i) => i.body && i.body.includes(marker));
+            if (existing) {
+              await github.rest.issues.createComment({
+                owner: context.repo.owner,
+                repo: context.repo.repo,
+                issue_number: existing.number,
+                body: `Still failing as of ${new Date().toISOString()}.\n\nRun: ${runUrl}`,
+              });
+              core.notice(`Updated existing failure issue #${existing.number}.`);
+            } else {
+              const { data: created } = await github.rest.issues.create({
+                owner: context.repo.owner,
+                repo: context.repo.repo,
+                title,
+                body,
+                labels: ["onion-smoke"],
+              });
+              core.notice(`Opened failure issue #${created.number}.`);
+            }
+
+      - name: Auto-close failure issue on green run
+        if: success() && steps.resolve.outputs.configured == 'yes' && steps.smoke.outcome == 'success'
+        uses: actions/github-script@v7
+        env:
+          RUN_URL: ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}
+        with:
+          script: |
+            const marker = "<!-- onion-smoke-reachable-failure -->";
+            const runUrl = process.env.RUN_URL;
+            const { data: open } = await github.rest.issues.listForRepo({
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              state: "open",
+              labels: "onion-smoke",
+              per_page: 100,
+            });
+            for (const issue of open) {
+              if (!issue.body || !issue.body.includes(marker)) continue;
+              await github.rest.issues.createComment({
+                owner: context.repo.owner,
+                repo: context.repo.repo,
+                issue_number: issue.number,
+                body: `Recovered. Most recent green run: ${runUrl}`,
+              });
+              await github.rest.issues.update({
+                owner: context.repo.owner,
+                repo: context.repo.repo,
+                issue_number: issue.number,
+                state: "closed",
+              });
+              core.notice(`Auto-closed recovered failure issue #${issue.number}.`);
+            }

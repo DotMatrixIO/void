@@ -1,0 +1,104 @@
+# VOID custom gitleaks ruleset
+# SPDX-License-Identifier: AGPL-3.0-or-later
+#
+# This file is the committed, versioned answer to "what were we looking for"
+# when we scanned VOID's full git history before going public. It is consumed
+# by `gitleaks detect --config .gitleaks-void.toml` and is intended to be
+# re-run on every future history scan (see docs/secret-scan-2026-*.md for the
+# dated scan artifacts that record each run's output and triage).
+#
+# Design notes:
+#   * `[extend] useDefault = true` keeps every upstream gitleaks rule (generic
+#     high-entropy secrets, cloud provider keys, private keys, JWTs, etc.) and
+#     layers VOID's product-specific credential rules on top.
+#   * The global allowlist below carries the *documented placeholder* values
+#     that VOID ships on purpose in README / example configs / manifests. They
+#     must never count as findings — they are the templates an operator fills
+#     in. Anything that is NOT one of these placeholders is a real hit to triage.
+
+title = "VOID custom gitleaks rules"
+
+[extend]
+useDefault = true
+
+# ---------------------------------------------------------------------------
+# Global allowlist: documented placeholders + reserved example domains.
+# These are the values VOID deliberately ships. A scan match equal to one of
+# these is expected and is NOT a leak.
+# ---------------------------------------------------------------------------
+[[allowlists]]
+description = "Documented placeholders, reserved example domains, and test vectors"
+regexTarget = "match"
+regexes = [
+  '''YOUR_SECRET_HERE''',
+  '''YOUR_LNBITS_API_KEY''',
+  '''YOUR_GREENFIELD_API_KEY''',
+  '''YOUR_STORE_ID''',
+  '''YOUR_STRONG_SECRET''',
+  '''YOUR_TURN_SECRET''',
+  '''YOUR_PUBLIC_IP''',
+  '''REPLACE_WITH_YOUR_TURN_SECRET''',
+  '''REPLACE_WITH_THE_SAME_SECRET''',
+  '''(?i)void\.example''',
+  '''(?i)your-(lnbits|btcpay|turn|domain)''',
+  '''(?i)changeme|placeholder|example|sample|dummy|redacted''',
+]
+# Paths that are documentation / examples by nature — placeholder secrets live
+# here on purpose. Real credential rules still apply to all *other* paths.
+paths = [
+  '''(?i)README.*\.md''',
+  '''coturn/turnserver\.conf\.example''',
+  '''docs/secret-scan-.*\.md''',
+  '''\.gitleaks-void\.toml''',
+]
+
+# ---------------------------------------------------------------------------
+# Confirmed-benign matches triaged during the 2026-06 publish scrub. These are
+# fabricated StartOS round-trip test vectors and a non-secret localStorage
+# cache-key constant — verified in source to be NOT credentials; they trip the
+# upstream generic-api-key rule only. Allowlisted by EXACT value (not by path)
+# so a real secret committed into the same files is still caught.
+# ---------------------------------------------------------------------------
+[[allowlists]]
+description = "Benign test vectors + non-secret cache-key constant (2026-06 scrub triage)"
+regexTarget = "match"
+regexes = [
+  '''(?:0123456789abcdef){4}''',          # full 64-char StartOS paywall-secret counting vector
+  '''\babc123def456\b''',                 # StartOS compat lnbits-api-key dummy value (bounded)
+  '''\bvoid\.onionReachability\.v1\b''',  # localStorage cache key string, not a credential
+]
+
+# ---------------------------------------------------------------------------
+# Product-specific credential rules (minimum set required by the release prep).
+# ---------------------------------------------------------------------------
+
+[[rules]]
+id = "void-lnbits-api-key"
+description = "LNbits API key assignment with a non-placeholder value"
+regex = '''(?i)LNBITS_API_KEY\s*[:=]\s*["']?([A-Za-z0-9]{16,})["']?'''
+keywords = ["lnbits_api_key"]
+
+[[rules]]
+id = "void-btcpay-api-key"
+description = "BTCPay Greenfield API key assignment with a non-placeholder value"
+regex = '''(?i)BTCPAY_API_KEY\s*[:=]\s*["']?([A-Za-z0-9_\-]{16,})["']?'''
+keywords = ["btcpay_api_key"]
+
+[[rules]]
+id = "void-turn-secret"
+description = "Coturn / TURN shared secret assignment with a non-placeholder value"
+regex = '''(?i)(TURN_SECRET|static-auth-secret)\s*[:=]\s*["']?([A-Fa-f0-9]{32,}|[A-Za-z0-9+/]{24,})["']?'''
+keywords = ["turn_secret", "static-auth-secret"]
+
+[[rules]]
+id = "void-paywall-secret"
+description = "Paywall JWT signing secret assignment (hex/base64 high-entropy value)"
+regex = '''(?i)PAYWALL_SECRET\s*[:=]\s*["']?([A-Fa-f0-9]{32,}|[A-Za-z0-9+/]{24,})["']?'''
+keywords = ["paywall_secret"]
+
+[[rules]]
+id = "void-dotenv-assignment"
+description = "Committed .env file containing KEY=VALUE assignments"
+regex = '''(?m)^\s*[A-Z][A-Z0-9_]{2,}\s*=\s*\S+'''
+path = '''(^|/)\.env(\.[A-Za-z0-9]+)?$'''
+keywords = ["="]
