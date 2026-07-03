@@ -1,27 +1,16 @@
 # THE VOID FEATURE POLICY
 
-**What we will build, what we might build, and what we will not build, even if asked nicely.**
+**What we will and won't build.**
 
-There comes a moment in the life of every software product when someone says, with perfect sincerity, "Could you add just one more thing?"
+"Could you add just one more thing?" someone might say. (A little chat panel. A file upload button. A dashboard for the dashboard.)
 
-A little chat panel. A file upload button. A whiteboard. A transcript. A recording archive. A dashboard for the dashboard.
+This is how a tool becomes a platform, how a room becomes a building.
 
-This is how a tool becomes a platform, and how a platform becomes a building full of fluorescent lighting and compliance officers.
+But VOID is not a building. VOID is definitely a room. It's a small temporary room where a few people can meet in real time and leave less behind than they would elsewhere.
 
-VOID is not a building.
+So, we needed a rule. **RULE: We will add features that increase live presence and reject features that create lasting artifacts.**
 
-VOID is a room.
-
-A small room. A temporary room. A room for a few people to meet in real time and leave less behind than they would elsewhere.
-
-So we need a rule.
-
-Our rule:
-
-**Add features that increase live presence.
-Reject features that create lasting artifacts.**
-
-That is the whole philosophy. Everything below is just the philosophy wearing work clothes.
+Everything below is just that idea wearing work clothes.
 
 ---
 
