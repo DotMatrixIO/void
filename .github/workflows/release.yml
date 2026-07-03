@@ -13,6 +13,34 @@
 #     published image digest is "what the canonical CI builder said",
 #     called out honestly in the README. Reproducing the void-client
 #     bundle bytes across hosts is the actual reproducibility claim.
+#
+# Onion bake (Option A — canonical-instance-specific sums):
+#   The void-client is built at NODE_ENV=production, which turns ON the
+#   fail-closed onion-bake guard in artifacts/void-client/vite.config.ts
+#   (assertOnionBake). That guard requires a valid v3 `.onion` host in
+#   VITE_VOID_ONION_HOST, or the build fails closed rather than shipping a
+#   silently-inert "Tor-reachable" bundle. We source the canonical address
+#   from the `VITE_VOID_ONION_HOST` repo VARIABLE (not a secret — the
+#   address is public: it ships in the README and the page footer) and
+#   inject the IDENTICAL value into EVERY production build step below (the
+#   pnpm build, the Docker image build's frontend stage, and both
+#   reproducibility rebuilds) so byte-identity still holds.
+#
+#   Consequence, stated honestly: baking the canonical `.onion` makes the
+#   published, signed SHA256SUMS.void-client SPECIFIC TO THE CANONICAL
+#   INSTANCE's build. A self-hoster who rebuilds with their own onion (or
+#   none) produces different bytes and will NOT match these sums — by
+#   design (see README-selfhost.md §7a, Posture A vs B). The
+#   reproducibility claim here is "the canonical CI build is deterministic
+#   against ITSELF (same source SHA + same onion variable → byte-identical
+#   rebuild)", not "every self-hoster's build matches ours".
+#
+#   Prerequisite / ordering: the canonical hidden-service key (and thus the
+#   `.onion` address) must exist BEFORE the first release runs; its address
+#   is stored in the repo variable, then the release builds around that
+#   fixed address. If the variable is empty the guard correctly fails the
+#   release closed (README-selfhost.md §6d). Do NOT weaken assertOnionBake
+#   to make a red build green — satisfy the guard, never disarm it.
 
 name: release
 
@@ -112,6 +140,13 @@ jobs:
           NODE_ENV: production
           PORT: "3000"
           BASE_PATH: /
+          # Canonical `.onion` address baked into the bundle. Sourced from
+          # the public repo VARIABLE (not a secret). Under NODE_ENV=production
+          # the onion-bake guard fails closed if this is unset/malformed, so
+          # an empty variable stops the release by design (see header + README
+          # §6d). Must be IDENTICAL to the value used by the reproducibility
+          # rebuild below or the byte-for-byte diff fails.
+          VITE_VOID_ONION_HOST: ${{ vars.VITE_VOID_ONION_HOST }}
         run: pnpm --filter @workspace/void-client run build
 
       - name: Build api-server with build-time provenance injection
@@ -198,11 +233,18 @@ jobs:
           load: true
           tags: void-app:${{ steps.tag.outputs.release_tag }}
           provenance: true
+          # VITE_VOID_ONION_HOST is required here too: the Dockerfile's
+          # `frontend` stage rebuilds the void-client at NODE_ENV=production
+          # (default ARG), so it hits the same fail-closed onion-bake guard.
+          # Pass the identical canonical address so the client baked into the
+          # image matches the pnpm-built bundle above (and its per-file
+          # sha256 map in the image's BUILD_INFO.json).
           build-args: |
             GIT_SHA=${{ steps.tag.outputs.git_sha }}
             GIT_SHA_SHORT=${{ steps.tag.outputs.git_sha }}
             RELEASE_TAG=${{ steps.tag.outputs.release_tag }}
             BUILD_TIMESTAMP=${{ github.event.head_commit.timestamp }}
+            VITE_VOID_ONION_HOST=${{ vars.VITE_VOID_ONION_HOST }}
           outputs: type=docker,name=void-app:${{ steps.tag.outputs.release_tag }}
 
       - name: Capture api-server image digest and verify embedded BUILD_INFO
@@ -403,6 +445,12 @@ jobs:
           NODE_ENV: production
           PORT: "3000"
           BASE_PATH: /
+          # Same canonical `.onion` variable as the build-and-sign job. The
+          # onion address is a build input that changes the bundle bytes, so
+          # the clean rebuild MUST use the identical value or the
+          # byte-for-byte diff below fails. This job is what enforces "the
+          # canonical build is deterministic against itself".
+          VITE_VOID_ONION_HOST: ${{ vars.VITE_VOID_ONION_HOST }}
         run: pnpm --filter @workspace/void-client run build
 
       - name: Recompute SHA256SUMS.void-client (clean rebuild)
@@ -471,6 +519,13 @@ jobs:
           NODE_ENV: production
           PORT: "3000"
           BASE_PATH: /
+          # Same canonical `.onion` variable as the other build steps. This
+          # job is advisory (continue-on-error above) and does not block the
+          # release on its own, but it must use the identical value so its
+          # diff against the released SHA256SUMS stays meaningful — otherwise
+          # a mismatch would always fire for the wrong reason (missing onion,
+          # not an arch difference).
+          VITE_VOID_ONION_HOST: ${{ vars.VITE_VOID_ONION_HOST }}
         run: pnpm --filter @workspace/void-client run build
 
       - name: Recompute and diff

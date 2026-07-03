@@ -1279,13 +1279,25 @@ Replace `<your-org>/<repo>` with the actual GitHub path. If verification passes 
 
 The release publishes the exact base-image digest it was built against. Use it:
 
+> **Read this before you run it — the onion address is a build input.** A `NODE_ENV=production` build bakes the `.onion` mirror address in via `VITE_VOID_ONION_HOST` and **fails closed if it is unset** (the onion-bake guard). That address is also part of the bytes: a bundle built with a different address (or none) hashes differently, so the `diff` below will not match. You must pass the address that was baked into the build you are checking:
+>
+> - **Verifying the canonical signed release (Posture A):** set `VITE_VOID_ONION_HOST` to the *canonical* address (printed in this README and the page footer). Your rebuild should then match the published `SHA256SUMS.void-client` byte-for-byte.
+> - **Verifying your own self-hosted build (Posture B):** set it to *your* address. Your rebuild reproduces *your* bundle, not the canonical release — that is correct and expected. Do not diff a build with your own onion against the canonical sums.
+>
+> See §7a ("The onion bake changes your hashes — and that's correct") for the full Posture A vs B explanation. `ONION_HOST` below is a placeholder for whichever of the two you are verifying.
+
 ```bash
+# 0. The .onion address baked into the build you are verifying (Posture A:
+#    the canonical address; Posture B: your own). A production build fails
+#    closed without it.
+ONION_HOST=<56-char-base32>.onion
+
 # 1. Read the digest the release was pinned to.
 DIGEST=$(grep '^digest=' .docker-base-digest | cut -d= -f2)
 
 # 2. Rebuild the void-client bundle in a clean container at the same SHA.
 git checkout <tag>           # e.g. v1.3.0
-docker run --rm -v "$PWD":/src -w /src "node:22.12.0-slim@${DIGEST}" \
+docker run --rm -v "$PWD":/src -w /src -e ONION_HOST "node:22.12.0-slim@${DIGEST}" \
   bash -c '
     apt-get update && apt-get install -y --no-install-recommends git ca-certificates
     # node:22.12.0-slim bundles corepack 0.29.4, which predates pnpm signing-key
@@ -1293,7 +1305,7 @@ docker run --rm -v "$PWD":/src -w /src "node:22.12.0-slim@${DIGEST}" \
     # carries the rotated keys first (matches the Dockerfile), then enable it.
     npm install -g corepack@0.34.5 && corepack enable && corepack prepare pnpm@10.26.1 --activate
     pnpm install --frozen-lockfile --prefer-offline
-    NODE_ENV=production PORT=3000 BASE_PATH=/ \
+    NODE_ENV=production PORT=3000 BASE_PATH=/ VITE_VOID_ONION_HOST="$ONION_HOST" \
       pnpm --filter @workspace/void-client run build
   '
 
@@ -1306,7 +1318,7 @@ docker run --rm -v "$PWD":/src -w /src "node:22.12.0-slim@${DIGEST}" \
 diff -u SHA256SUMS.void-client SHA256SUMS.local && echo "REPRODUCED."
 ```
 
-If the `diff` is empty, your local rebuild produced the same bytes the public CI did. If it is non-empty, that is the loud, honest failure mode.
+If the `diff` is empty, your local rebuild produced the same bytes the reference you targeted did (the canonical release under Posture A, or your own build under Posture B). If it is non-empty, that is the loud, honest failure mode — but first double-check you baked the *same* `ONION_HOST` the reference was built with, since a different onion address alone changes every hash.
 
 The published Docker image digest is "what the canonical CI builder said" rather than something every reader can independently re-derive across all hosts — kernel and glibc variation across build hosts makes whole-image reproducibility impractical. The void-client bundle, which is what the user's browser actually executes, *is* reproducible from the recipe above. The image digest is for cross-checking the same builder over time, not for cross-checking across builders.
 
