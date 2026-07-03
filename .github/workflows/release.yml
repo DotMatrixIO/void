@@ -63,6 +63,20 @@ permissions:
 env:
   PINNED_NODE_VERSION: "22.12.0"
   PINNED_PNPM_VERSION: "10.26.1"
+  # The Tor v3 .onion mirror host baked into the canonical production
+  # void-client bundle. Sourced from a repository VARIABLE (not a secret — the
+  # address is public: it ships in the README and the page footer). This is the
+  # SINGLE source of truth threaded into every production build path below
+  # (build-and-sign, reproducibility-check, reproducibility-check-arm64) so all
+  # of them bake the IDENTICAL address and the byte-for-byte reproducibility
+  # diff holds. Keep it in lockstep the same way the corepack pin is kept in
+  # lockstep across Dockerfile / README-selfhost.md. When this variable is unset
+  # the onion-bake guard (artifacts/void-client/src/lib/onionHost.ts, wired in
+  # vite.config.ts) fails the NODE_ENV=production build CLOSED rather than
+  # shipping a "Tor-reachable" bundle whose onion link is silently inert. Set it
+  # to the deployment's <56-char-base32>.onion host (see README-selfhost.md §6e
+  # Step 2 and §7a) to publish the onion-baked release.
+  VITE_VOID_ONION_HOST: ${{ vars.VITE_VOID_ONION_HOST }}
 
 jobs:
   # ---------------------------------------------------------------------
