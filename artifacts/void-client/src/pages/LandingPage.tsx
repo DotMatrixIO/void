@@ -157,7 +157,7 @@ export default function LandingPage({
           >
             Conversations belong to the people having them.
           </div>
-          {/* v0.5 / open beta framing. Pinned by
+          {/* v0.6 / open beta framing. Pinned by
               __tests__/v05OpenBetaLabel.test.tsx — see that file's loud
               failure message before renaming this string. Sits below the
               thesis line, intentionally small and pushed down so it reads as
@@ -176,7 +176,7 @@ export default function LandingPage({
               padding: "3px 8px",
             }}
           >
-            OPEN BETA · v0.5
+            OPEN BETA · v0.6
           </div>
         </div>
 

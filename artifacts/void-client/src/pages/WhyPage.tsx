@@ -52,7 +52,7 @@ export default function WhyPage() {
 
   return (
     <PageShell backHref="/" backLabel="← BACK">
-      {/* v0.5 / open beta acknowledgement — sits under the hamburger
+      {/* v0.6 / open beta acknowledgement — sits under the hamburger
           in the normal scrollable flow (not sticky). Pinned by
           __tests__/v05OpenBetaLabel.test.tsx. */}
       <OpenBetaCaption data-testid="why-v05-acknowledgement" />

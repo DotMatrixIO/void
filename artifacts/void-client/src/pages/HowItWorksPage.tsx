@@ -35,7 +35,7 @@ export default function HowItWorksPage() {
 
         <p style={sectionHeaderStyle}>WHAT VOID IS</p>
         <p style={{ margin: "0 0 12px" }}>
-          VOID is a stateless, encrypted, peer-to-peer way for a few
+          VOID is an ephemeral, encrypted, peer-to-peer way for a few
           people to talk.
         </p>
         <p style={{ margin: "0 0 12px" }}>

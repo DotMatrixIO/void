@@ -68,7 +68,7 @@ const snowdenBoxStyle: React.CSSProperties = {
 export default function DocsHowItWorksPage() {
   return (
     <PageShell backHref="/how-it-works" backLabel="← BACK TO SHORT VERSION">
-      {/* v0.5 / open beta acknowledgement — sits under the hamburger
+      {/* v0.6 / open beta acknowledgement — sits under the hamburger
           in the normal scrollable flow (not sticky). */}
       <OpenBetaCaption data-testid="docs-how-v05-acknowledgement" />
 
@@ -93,7 +93,7 @@ export default function DocsHowItWorksPage() {
           have a legal team.
         </p>
         <p style={{ marginBottom: "16px" }}>
-          VOID is — technically speaking — a stateless, encrypted, peer-to-peer
+          VOID is — technically speaking — an ephemeral, encrypted, peer-to-peer
           communication channel. No accounts. No recording. No transcript. No
           record of what was said by whom. This is not because we are
           trustworthy. It’s because the architecture makes retention

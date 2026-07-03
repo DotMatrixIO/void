@@ -5,6 +5,7 @@
 - [Demo-video fixed-canvas scaling](demo-video-fixed-canvas.md) — scenes are pixel-tuned for 1280×720; scale the whole canvas to fit fluid embeds (don't patch font sizes); vw/vh inside the canvas break under scaling — use canvas-px.
 - [Replit preview navigation](replit-preview-navigation.md) — inside the proxied preview iframe a full nav to a constructed BASE_URL strands the user on a blank page; use replaceState + location.reload() (current doc) to reset & go home.
 - [void-client copy/color CI guards](void-client-copy-guards.md) — user-facing copy/color edits must pass the marketing-voice checks (banned phrases, required literals, contrast token audit); run them before completing.
+- [VOID "stateless" claim scope](void-stateless-claim-scope.md) — accurate claim is "no accounts and no room content stored"/"ephemeral" (§3.5 paid-room snapshot survives restart); marketing guards DON'T scan root README.md.
 - [void-client route/copy-rename guard fan-out](void-client-route-rename-guards.md) — new route needs a VOID_TECHNICAL_OVERVIEW.md §6.2 row; renamed button copy must be updated in vitest AND both tests/playwright specs (exact-string names).
 - [launch-links gate vs gitignored evidence](launch-links-gitignored-merge.md) — task-agent fixes under gitignored attached_assets/ don't survive merge; main stays red but it never blocks publish.
 - [backdrop-filter vs opacity layers](backdrop-filter-opacity-layer.md) — large opacity<1 overlays break nearby backdrop-filter text (vanishes until repaint); bake alpha into rgba() instead of using opacity.

@@ -34,7 +34,7 @@ interface Line {
 // PRICE_LINGER_MS, then the splash fades out as a unit (500 ms).
 const SCRIPT: Line[] = [
   { at: 100,  group: 1, text: "V  []  I  D",                              variant: "brand" },
-  { at: 600,  group: 1, text: "OPEN BETA · v0.5",                         variant: "badge" },
+  { at: 600,  group: 1, text: "OPEN BETA · v0.6",                         variant: "badge" },
   { at: 1100, group: 1, text: "(EARLY AND UNFINISHED)",                   variant: "rough" },
 
   { at: 1900, group: 2, text: "Send anyone a link.",                      variant: "headline" },

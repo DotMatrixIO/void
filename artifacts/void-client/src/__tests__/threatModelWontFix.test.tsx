@@ -3,7 +3,7 @@ import { describe, it } from "vitest";
 import { render, screen } from "@testing-library/react";
 import DocsThreatModelPage from "@/pages/docs/DocsThreatModelPage";
 
-// This test pins the canonical "WHAT VOID WON'T FIX IN v0.5" section on
+// This test pins the canonical "WHAT VOID WON'T FIX IN v0.6" section on
 // ThreatModelPage. It does two things, both load-bearing:
 //
 //   1. Asserts the section heading is present verbatim.
@@ -18,7 +18,7 @@ import DocsThreatModelPage from "@/pages/docs/DocsThreatModelPage";
 // failure mode. The custom error message below is intentionally loud so
 // they have to read it before they can remove the test.
 
-const SECTION_HEADING = "WHAT VOID WON’T FIX IN v0.5";
+const SECTION_HEADING = "WHAT VOID WON’T FIX IN v0.6";
 
 const SCREEN_RECORDING_PARAGRAPH =
   "A participant in your call can press their OS screen recorder, " +
@@ -34,11 +34,11 @@ const SCREEN_RECORDING_PARAGRAPH =
 const FAILURE_MESSAGE =
   "\n\n" +
   "================================================================\n" +
-  "ThreatModelPage \"WHAT VOID WON'T FIX IN v0.5\" assertion failed.\n" +
+  "ThreatModelPage \"WHAT VOID WON'T FIX IN v0.6\" assertion failed.\n" +
   "================================================================\n" +
   "\n" +
   "This section is the canonical published list of things VOID\n" +
-  "deliberately does not fix in v0.5. Edits require updating BOTH\n" +
+  "deliberately does not fix in v0.6. Edits require updating BOTH\n" +
   "the internal launch checklist (#316) AND\n" +
   "`docs/marketing-claims-audit.md`. If you are confident, update\n" +
   "all three sites and re-run.\n" +
@@ -55,7 +55,7 @@ function normalize(text: string): string {
   return text.replace(/\s+/g, " ").trim();
 }
 
-describe("DocsThreatModelPage \u2014 WHAT VOID WON'T FIX IN v0.5", () => {
+describe("DocsThreatModelPage \u2014 WHAT VOID WON'T FIX IN v0.6", () => {
   it("renders the section heading and screen-recording paragraph verbatim", () => {
     render(<DocsThreatModelPage />);
 

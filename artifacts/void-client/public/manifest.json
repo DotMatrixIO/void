@@ -1,7 +1,7 @@
 {
   "name": "VOID",
   "short_name": "VOID",
-  "description": "Stateless, P2P video conferencing gated by Lightning. No accounts. No logs. Cryptographically impenetrable.",
+  "description": "P2P video conferencing gated by Lightning. No accounts and no room content stored. No logs. Cryptographically impenetrable.",
   "start_url": "./",
   "scope": "./",
   "display": "standalone",

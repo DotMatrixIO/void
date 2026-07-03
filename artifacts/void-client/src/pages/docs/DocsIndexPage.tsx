@@ -30,7 +30,7 @@ const DOC_ENTRIES: ReadonlyArray<DocEntry> = [
     title: "THREAT MODEL",
     href: "/docs/threat-model",
     description:
-      "What the server can see, what it cannot, network observers, browser-level surfaces, Tor and the media path, supply chain, the won’t-fix list for v0.5, and the honest summary.",
+      "What the server can see, what it cannot, network observers, browser-level surfaces, Tor and the media path, supply chain, the won’t-fix list for v0.6, and the honest summary.",
     updated: "2026-05-27",
   },
   {

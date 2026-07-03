@@ -4,7 +4,7 @@ Run your own signaling server. Run your own TURN. Run your own paywall. Keep the
 
 ## At a Glance
 
-- **What VOID is:** a stateless, ephemeral, privacy-first video room for up to 4 people
+- **What VOID is:** an ephemeral, privacy-first video room for up to 4 people
 - **What it is not:** Zoom, Slack, a file locker, or a database with a camera attached
 - **What you host:** the HTTPS app, the signaling API, the paywall API, and ideally your own TURN relay
 - **What the server stores:** no accounts, no room history, no database rows, no persistent user content
@@ -31,7 +31,7 @@ Run your own signaling server. Run your own TURN. Run your own paywall. Keep the
 
 ## 1. Introduction
 
-Here is what VOID is. It is a stateless, end-to-end encrypted, peer-to-peer video conferencing PWA for privacy-focused conversations. There are no accounts. No database. No server-side user profiles. No stored room history. Rooms hold at most 4 participants, expire automatically after 65 minutes, and are created through a Lightning paywall where the host pays a small per-room fee (about the price of a cup of coffee, quoted live by the server) and joiners enter free. Media flows peer-to-peer over WebRTC. The server handles signaling and payment verification.
+Here is what VOID is. It is an ephemeral, end-to-end encrypted, peer-to-peer video conferencing PWA for privacy-focused conversations. There are no accounts. No database. No server-side user profiles. No stored room history. Rooms hold at most 4 participants, expire automatically after 65 minutes, and are created through a Lightning paywall where the host pays a small per-room fee (about the price of a cup of coffee, quoted live by the server) and joiners enter free. Media flows peer-to-peer over WebRTC. The server handles signaling and payment verification.
 
 That is already unusual. Most software wants to know everything about you. VOID is trying to forget you as fast as possible. There is something almost polite about that.
 

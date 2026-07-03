@@ -1,13 +1,13 @@
 manifestVersion: 1
 id: void
 name: VOID
-tagline: Stateless, end-to-end encrypted P2P video over Lightning
+tagline: Ephemeral, end-to-end encrypted P2P video over Lightning
 icon: https://raw.githubusercontent.com/DotMatrixIO/void/main/void-icon.png
 category: communication
 version: "1.2.0"
 port: 3000
 description: >-
-  VOID is a stateless, end-to-end encrypted peer-to-peer video
+  VOID is an ephemeral, end-to-end encrypted peer-to-peer video
   conferencing app. No accounts, no database, no logs. Rooms hold
   up to 4 participants, expire automatically (65 minutes on the
   standard tier, 24 hours on the day tier), and live in process

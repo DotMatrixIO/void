@@ -181,9 +181,9 @@ export default function DocsThreatModelPage() {
 
   return (
     <PageShell backHref="/threat-model" backLabel="← BACK TO SHORT VERSION">
-      {/* v0.5 / open beta acknowledgement — sits under the hamburger
+      {/* v0.6 / open beta acknowledgement — sits under the hamburger
           in the normal scrollable flow (not sticky). The won't-fix
-          section below already references v0.5; this caption keeps
+          section below already references v0.6; this caption keeps
           the framing consistent with the landing page. Pinned by
           __tests__/v05OpenBetaLabel.test.tsx. */}
       <OpenBetaCaption data-testid="threat-model-v05-acknowledgement" />
@@ -2132,7 +2132,7 @@ export default function DocsThreatModelPage() {
 
       <div style={dividerStyle} />
 
-      {/* What VOID won't fix in v0.5.
+      {/* What VOID won't fix in v0.6.
 
           This section is the published inverse of the internal launch
           checklist (Task #316). Every item below corresponds to either a
@@ -2144,13 +2144,13 @@ export default function DocsThreatModelPage() {
           anything. */}
       <div style={sectionStyle} data-testid="wont-fix-section">
         <div style={subheadingStyle} data-testid="wont-fix-heading">
-          <span style={goldText}>▌</span> WHAT VOID WON’T FIX IN v0.5
+          <span style={goldText}>▌</span> WHAT VOID WON’T FIX IN v0.6
         </div>
         <p style={{ marginBottom: "16px" }}>
           We would rather ship the smallest version of VOID we are
           proud of than spend another year chasing every shape of
           private call we can imagine. The list below is the cost of
-          that choice: real limitations of v0.5 that we know about,
+          that choice: real limitations of v0.6 that we know about,
           have decided not to close in this release, and are naming
           here on purpose. This list is the inverse of our internal
           launch checklist; the two are kept in sync — when something
@@ -2166,7 +2166,7 @@ export default function DocsThreatModelPage() {
           refuse a fifth peer than ship a five-person call that hisses
           and stutters on the laptops the average person owns. If your
           shape is many-to-one (a presenter to a quiet audience),
-          v0.5 is not the right tool — VOID is built for small,
+          v0.6 is not the right tool — VOID is built for small,
           symmetric calls. The underlying mesh-topology trade-off is
           documented in <code style={{ color: "var(--gold)" }}>VOID_TECHNICAL_OVERVIEW.md</code>{" "}
           §”Mesh topology”.
@@ -2333,7 +2333,7 @@ export default function DocsThreatModelPage() {
         </p>
 
         <p style={closingLineStyle}>
-          If your threat model requires any of the above, VOID v0.5
+          If your threat model requires any of the above, VOID v0.6
           is not the right tool for you.
         </p>
       </div>

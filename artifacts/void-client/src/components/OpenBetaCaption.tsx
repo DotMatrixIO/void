@@ -28,7 +28,7 @@ export default function OpenBetaCaption({
         ...style,
       }}
     >
-      This is OPEN BETA · v0.5
+      This is OPEN BETA · v0.6
       <br />
       We expect to find bugs for a while.
     </div>

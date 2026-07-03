@@ -38,7 +38,7 @@ import LandingPage from "@/pages/LandingPage";
 import ThreatModelPage from "@/pages/ThreatModelPage";
 import WhyPage from "@/pages/WhyPage";
 
-// Task #323. The product version label `OPEN BETA · v0.5` is pinned
+// Task #323. The product version label `OPEN BETA · v0.6` is pinned
 // across the user-visible surface (landing-page hero, PWA install
 // prompt, threat-model header, why page). The label is load-bearing —
 // it sets the expectation that this is the first publicly-supported
@@ -48,9 +48,9 @@ import WhyPage from "@/pages/WhyPage";
 //
 // Note: the WhyPage, ThreatModelPage, DocsHowItWorksPage and
 // DocsThreatModelPage acknowledgements all render the standardized
-// sentence "This is OPEN BETA · v0.5 — We expect to find bugs for a
+// sentence "This is OPEN BETA · v0.6 — We expect to find bugs for a
 // while." (Task #565). The assertions below match on the presence of
-// the "OPEN BETA" and "v0.5" tokens rather than the full sentence —
+// the "OPEN BETA" and "v0.6" tokens rather than the full sentence —
 // the load-bearing contract is that each page names the version,
 // not the exact wording of the surrounding sentence.
 //
@@ -58,17 +58,17 @@ import WhyPage from "@/pages/WhyPage";
 // to v0.6 / v1.0 in one place but not the others. The loud failure
 // message below is the reminder to update all three sites together.
 
-const BADGE = "OPEN BETA · v0.5";
+const BADGE = "OPEN BETA · v0.6";
 
 const FAILURE_MESSAGE =
   "\n\n" +
   "================================================================\n" +
-  "v0.5 / OPEN BETA label assertion failed.\n" +
+  "v0.6 / OPEN BETA label assertion failed.\n" +
   "================================================================\n" +
   "\n" +
   "If you are renaming v0.5 to v0.6 / v1.0, update\n" +
   "the internal launch checklist, the threat-model won't-fix section\n" +
-  "(WHAT VOID WON'T FIX IN v0.5), and the marketing-claims-audit\n" +
+  "(WHAT VOID WON'T FIX IN v0.6), and the marketing-claims-audit\n" +
   "ledger (docs/marketing-claims-audit.md \"Version label\" section)\n" +
   "together — in the same commit. The protocol-version identifiers\n" +
   "(VOID-ECDHE-v1, VOID-SAS-v1, VOID-INVITE-v1) are frozen wire\n" +
@@ -86,8 +86,8 @@ function normalize(text: string): string {
   return text.replace(/\s+/g, " ").trim();
 }
 
-describe("v0.5 / OPEN BETA framing", () => {
-  it("LandingPage carries the OPEN BETA · v0.5 badge near the hero", () => {
+describe("v0.6 / OPEN BETA framing", () => {
+  it("LandingPage carries the OPEN BETA · v0.6 badge near the hero", () => {
     render(<LandingPage onJoinRoom={() => {}} />);
     const badge = screen.queryByTestId("open-beta-badge");
     if (badge === null || normalize(badge.textContent ?? "") !== BADGE) {
@@ -99,26 +99,26 @@ describe("v0.5 / OPEN BETA framing", () => {
     }
   });
 
-  it("ThreatModelPage header carries the v0.5 acknowledgement consistent with the won't-fix section", () => {
+  it("ThreatModelPage header carries the v0.6 acknowledgement consistent with the won't-fix section", () => {
     render(<ThreatModelPage />);
     const ack = screen.queryByTestId("threat-model-v05-acknowledgement");
     const text = normalize(ack?.textContent ?? "");
-    if (ack === null || !text.includes("OPEN BETA · v0.5")) {
+    if (ack === null || !text.includes("OPEN BETA · v0.6")) {
       throw new Error(
-        `Expected ThreatModelPage header to acknowledge OPEN BETA · v0.5. ` +
+        `Expected ThreatModelPage header to acknowledge OPEN BETA · v0.6. ` +
           `Got: ${ack === null ? "(no element with data-testid=\"threat-model-v05-acknowledgement\")" : JSON.stringify(text)}.` +
           FAILURE_MESSAGE,
       );
     }
   });
 
-  it("WhyPage carries a one-line v0.5 acknowledgement", () => {
+  it("WhyPage carries a one-line v0.6 acknowledgement", () => {
     render(<WhyPage />);
     const ack = screen.queryByTestId("why-v05-acknowledgement");
     const text = normalize(ack?.textContent ?? "");
-    if (ack === null || !text.includes("OPEN BETA") || !text.includes("v0.5")) {
+    if (ack === null || !text.includes("OPEN BETA") || !text.includes("v0.6")) {
       throw new Error(
-        `Expected WhyPage to acknowledge OPEN BETA and v0.5 in one line. ` +
+        `Expected WhyPage to acknowledge OPEN BETA and v0.6 in one line. ` +
           `Got: ${ack === null ? "(no element with data-testid=\"why-v05-acknowledgement\")" : JSON.stringify(text)}.` +
           FAILURE_MESSAGE,
       );

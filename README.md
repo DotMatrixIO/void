@@ -1,6 +1,6 @@
 # VOID
 
-Stateless, ephemeral, privacy-first peer-to-peer video conferencing.
+Ephemeral, privacy-first peer-to-peer video conferencing.
 
 VOID rooms hold up to 4 humans on real-time WebRTC, with no accounts, no
 database rows, and no persistent user content on the server.
@@ -89,7 +89,7 @@ production checklist are in [`README-selfhost.md`](README-selfhost.md).
 
 ## Status & versioning
 
-VOID is pre-1.0. The current target is an open beta (`v0.5`).
+VOID is pre-1.0. The current target is an open beta (`v0.6`).
 The package manifest (`manifest.yaml`) carries its own package version, which
 moves on its own schedule and is not the product version.
 

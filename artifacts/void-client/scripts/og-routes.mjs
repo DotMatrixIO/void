@@ -49,7 +49,7 @@ export const OG_ROUTES = [
     path: "/",
     title: "VOID | Ephemeral, Zero-Knowledge Video Rooms",
     description:
-      "Stateless, peer-to-peer video. No accounts. No logs. The room burns down when you're done.",
+      "Peer-to-peer video. No accounts and no room content stored. No logs. The room burns down when you're done.",
     headline:
       "Send anyone a link. They click. You talk. The room burns down.",
     accent: "gold",
@@ -64,9 +64,9 @@ export const OG_ROUTES = [
   {
     slug: "why",
     path: "/why",
-    title: "VOID | The Case for Stateless, Zero-Knowledge Video",
+    title: "VOID | The Case for Ephemeral, Zero-Knowledge Video",
     description:
-      "There is a difference between a promise and a proof. A promise has a legal team. A proof is math. This is the case for stateless video.",
+      "There is a difference between a promise and a proof. A promise has a legal team. A proof is math. This is the case for ephemeral, peer-to-peer video.",
     headline: "We didn't make a promise. We made a proof.",
     accent: "gold",
     image: "/og/this-room-will-not-exist-social.jpg",
