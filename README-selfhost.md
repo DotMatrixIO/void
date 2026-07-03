@@ -153,6 +153,17 @@ git clone https://github.com/DotMatrixIO/void.git
 cd void
 ```
 
+> **If the repository is still private**, the unauthenticated HTTPS clone above will fail. Until the repo is flipped public (§6e Step 8), the clone must be authenticated — either an HTTPS Personal Access Token or an SSH deploy key:
+>
+> ```bash
+> # HTTPS with a Personal Access Token
+> git clone https://<TOKEN>@github.com/DotMatrixIO/void.git
+> # or SSH with a deploy key
+> git clone git@github.com:DotMatrixIO/void.git
+> ```
+>
+> If you are the canonical operator, use the pseudonym's credentials for this — see the nym git-authorship note in §6e Step 0, so the clone does not leak a real-name identity.
+
 ### 2) Copy the example Coturn config
 
 ```bash
@@ -1103,6 +1114,8 @@ This is the step with the ordering trap. The `.onion` address is derived from th
 2. **Feed the fixed address into the canonical release CI** as the build-time `VITE_VOID_ONION_HOST` value, so the published, signed bundle is the onion-baked one. The address is **public** — it ships in the README and the page footer — so configure it as a CI **variable**, not a secret. Important: `release.yml` has **three** build steps (the `build-and-sign` job plus two `reproducibility-check` jobs), and all three should inject the **identical** value. The release-blocking check is the clean-container `reproducibility-check` job: if its rebuild does not match the signed bundle byte-for-byte, the release (correctly) refuses to publish — so a mismatch between `build-and-sign` and that job will stop the release. The arm64 `reproducibility-check-arm64` job runs informationally (`continue-on-error: true`) for Pi-class targets and does not by itself block the release, but give it the same value anyway so its diff stays meaningful.
 3. **Then provision the instance around that fixed address** — DNS, TLS, the Tor hidden service bound to the key from step 1, and `ONION_HOSTNAME` set to the same address in the served instance env (§8.6 and `docs/onion-mirror-runbook.md`).
 4. **Enable the onion-inertness build guard** for the production build. A production build of the canonical instance with the guard disabled is a deviation, not a shortcut — note it explicitly in the go-live record if you ever have to do it. (The guard's implementation is tracked separately; this runbook only requires that the operator build sets it.)
+
+**Repository access while it is still private:** getting the source onto the build host happens *before* the Step 8 public flip, so at build time the repo is still private. A local build (Posture B) or any pre-launch checkout on the VPS must therefore use authenticated git — an HTTPS Personal Access Token or an SSH deploy key (same forms as §3 Step 1) — with the pseudonym's credentials from Step 0, not a real-name config. Posture A's release CI runs on the canonical repo and already has access. Only after Step 8 do unauthenticated clones work for anyone verifying the build.
 
 **Choose a provenance posture and know what it lets you claim** — this is the same Posture A / Posture B distinction explained in detail in §7a ("The onion bake changes your hashes — and that's correct"):
 
