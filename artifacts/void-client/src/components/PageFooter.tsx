@@ -113,7 +113,7 @@ export default function PageFooter({ paddingTop = "24px", onPavement = false }: 
           color: "color-mix(in srgb, currentColor 85%, transparent)",
         }}
       >
-        P2P · no accounts · no stored rooms · E2E encrypted · ephemeral keys · AGPLv3 · © 2026 VOID
+        P2P · no accounts · no room content stored · E2E encrypted · ephemeral keys · AGPLv3 · © 2026 VOID
       </div>
     </div>
   );
