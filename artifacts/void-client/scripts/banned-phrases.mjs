@@ -94,6 +94,37 @@ const GRANT_NGI_ZERO = /\bngi[-\s]?(?:zero|0)\b/i;
 const STATELESS_OVERCLAIM =
   /\bstateless\b(?![-\s]+(?:architecture|jwt|signaling|server)s?\b)/i;
 
+// "restart is a clean slate" / "restart wipes room state" over-claim (Task
+// #1089). This is the sibling over-claim to "stateless": the package
+// manifests and self-host runbook must not say a restart wipes everything.
+// The server keeps a minimal paid-room metadata snapshot (data/rooms.json —
+// host payment hashes, paid window, tier, room type, relay/lock flags; never
+// room content or peer identities) that SURVIVES an operator restart so a host
+// who refreshes mid-window need not re-pay (VOID_TECHNICAL_OVERVIEW.md §3.5).
+// The accurate framing is that only *volatile* per-socket state (peers,
+// sockets, pending knocks, recovery codes, the JWT secret) is wiped, with the
+// paid-room snapshot as the explicit exception.
+//
+// Two forms are caught:
+//   1. "clean slate" within the same clause as "restart" (either order) —
+//      the manifest drift "live in process memory only — restart equals clean
+//      slate". SAME_CLAUSE never crosses a `.`/`;`/newline, so the honest,
+//      explicitly-caveated "it is not a full clean slate for paid rooms; it is
+//      a clean slate for everything volatile" (which puts a `.`/`;` between
+//      "restart" and "clean slate") stays sayable.
+//   2. a bare "wipes room state" — the README drift "A restart wipes room
+//      state by design". The accurate "wipes all volatile room state" is not
+//      matched because "wipes" is not immediately followed by "room state",
+//      and "wipes them" (recovery codes) never mentions room state.
+// For a genuinely legitimate use, add a `banned-phrase-allow:` marker with a
+// reason.
+const RESTART_CLEAN_SLATE = new RegExp(
+  `\\brestart\\b${SAME_CLAUSE}\\bclean slate\\b` +
+    `|\\bclean slate\\b${SAME_CLAUSE}\\brestart\\b` +
+    "|\\bwipes?\\s+room state\\b",
+  "i",
+);
+
 export const BANNED_PHRASES = [
   { label: "grant-application name (NLnet)", pattern: GRANT_NLNET },
   { label: "grant-application name (NGI Zero)", pattern: GRANT_NGI_ZERO },
@@ -101,6 +132,11 @@ export const BANNED_PHRASES = [
   {
     label: "stateless (over-claim — use ephemeral)",
     pattern: STATELESS_OVERCLAIM,
+  },
+  {
+    label:
+      "restart clean-slate / wipes room state (over-claim — the paid-room snapshot survives)",
+    pattern: RESTART_CLEAN_SLATE,
   },
   { label: "powerful", pattern: /\bpowerful\w*\b/i },
   { label: "seamless", pattern: /\bseamless\w*\b/i },

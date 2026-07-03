@@ -1435,7 +1435,7 @@ docker compose up -d
 
 ### No Migrations
 
-There is no database, so there are no schema migrations. A restart wipes room state by design.
+There is no database, so there are no schema migrations. A restart wipes all volatile room state (peers, sockets, pending knocks, recovery codes, the JWT secret) by design; the one exception is the minimal paid-room metadata snapshot (`data/rooms.json` — paid window, tier, room type, moderation flags, host-reclaim tokens; never room content or peer identities), which is rehydrated on startup so a paid host who refreshes mid-window need not re-pay (see §4e).
 
 ### What to Check After Updating
 

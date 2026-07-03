@@ -149,6 +149,48 @@ describe("banned marketing phrase detector", () => {
     });
   });
 
+  // "restart is a clean slate" / "wipes room state" over-claim guard (Task
+  // #1089). Sibling drift to "stateless": the manifests and self-host runbook
+  // must not say a restart wipes everything, because the paid-room metadata
+  // snapshot (data/rooms.json) survives an operator restart
+  // (VOID_TECHNICAL_OVERVIEW.md §3.5). These cases lock in that the two drift
+  // forms are flagged while the explicitly-caveated, volatile-scoped framing
+  // (and the recovery-code / JWT-secret uses that really are wiped) stay
+  // sayable.
+  describe("restart clean-slate over-claim coverage", () => {
+    const LABEL =
+      "restart clean-slate / wipes room state (over-claim — the paid-room snapshot survives)";
+
+    it("flags the restart-equals-clean-slate and wipes-room-state drift", () => {
+      const banned = [
+        "Live in process memory only \u2014 restart equals clean slate.",
+        "A restart wipes room state by design.",
+        "On restart the server is a clean slate.",
+      ];
+      for (const sample of banned) {
+        expect(
+          scan(sample).map((h) => h.phrase),
+          `expected to flag a restart over-claim in: ${sample}`,
+        ).toContain(LABEL);
+      }
+    });
+
+    it("allows the accurate volatile-scoped and caveated framing", () => {
+      const allowed = [
+        "A restart wipes all volatile room state (peers, sockets) by design; the one exception is the minimal paid-room metadata snapshot.",
+        "It is not a full clean slate for paid rooms; it is a clean slate for everything volatile, by design.",
+        "Codes live in memory only, so a server restart wipes them in step with the JWT secret.",
+        "Volatile per-socket room state, recovery codes, and the JWT secret stay in process memory and are wiped on restart, so the posture is unchanged.",
+      ];
+      for (const sample of allowed) {
+        expect(
+          scan(sample).map((h) => h.phrase),
+          `did not expect a restart over-claim flag in: ${sample}`,
+        ).not.toContain(LABEL);
+      }
+    });
+  });
+
   it("matches inflected forms (powerfully, seamlessly, robustness)", () => {
     expect(scan("<p>works powerfully</p>").map((h) => h.phrase)).toContain(
       "powerful",
