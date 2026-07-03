@@ -118,6 +118,10 @@ args = "publish-inventory"
 task = "workflow.run"
 args = "check:pnpm-action-version"
 
+[[workflows.workflow.tasks]]
+task = "workflow.run"
+args = "release-onion-bake"
+
 [[workflows.workflow]]
 name = "api-server-tests"
 author = "agent"
@@ -378,6 +382,17 @@ author = "agent"
 [[workflows.workflow.tasks]]
 task = "shell.exec"
 args = "pnpm --filter @workspace/scripts run check:pnpm-action-version"
+
+[workflows.workflow.metadata]
+isValidation = true
+
+[[workflows.workflow]]
+name = "release-onion-bake"
+author = "agent"
+
+[[workflows.workflow.tasks]]
+task = "shell.exec"
+args = "pnpm --filter @workspace/void-client run check:release-onion-bake"
 
 [workflows.workflow.metadata]
 isValidation = true

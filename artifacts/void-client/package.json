@@ -14,6 +14,7 @@
     "check:literals": "node scripts/check-required-literals.mjs",
     "check:feature-policy-sync": "node scripts/check-feature-policy-sync.mjs",
     "check:onion-mirror-sync": "node scripts/check-onion-mirror-sync.mjs",
+    "check:release-onion-bake": "node scripts/check-release-onion-bake.mjs",
     "check:still-poster": "node scripts/check-still-poster.mjs",
     "check:biometric-video-drift": "node scripts/check-biometric-video-drift.mjs",
     "check:biometric-poster-drift": "node scripts/check-biometric-poster-drift.mjs",
