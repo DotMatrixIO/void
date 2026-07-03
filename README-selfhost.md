@@ -486,6 +486,34 @@ Verify:
 - the key can create invoices
 - the key can check payment status
 
+#### Reaching LNbits over a host-side Tor bridge
+
+The verification above assumes LNbits sits at an ordinary `host:port` the container can dial directly. A common sovereign setup breaks that assumption: LNbits runs on a separate node at home (for example a Start9 or Umbrel box) and is reachable only over its Tor `.onion` address. The usual pattern is to run a local forwarder on the VPS — `socat` or similar, listening on a local port and forwarding through the Tor SOCKS proxy to the `.onion` — so the rest of the stack can treat LNbits as a plain local port.
+
+Two traps show up when the VOID app runs under Docker and LNbits is reached this way. Both are handled by a single `docker-compose.override.yml`, which Compose merges automatically, so the tracked `docker-compose.yml` stays clean for `git pull` updates (§8):
+
+```yaml
+# docker-compose.override.yml  — local only, do not commit
+services:
+  void:
+    environment:
+      LIGHTNING_FETCH_TIMEOUT_MS: ${LIGHTNING_FETCH_TIMEOUT_MS:-15000}
+    networks:
+      - lnbits
+networks:
+  lnbits:
+    ipam:
+      config:
+        - subnet: 172.28.0.0/16
+          gateway: 172.28.0.1
+```
+
+**1. A container cannot reach the host's `127.0.0.1`.** If the forwarder listens on `127.0.0.1:5000` on the host, `LNBITS_URL=http://127.0.0.1:5000` fails from inside the `void` container: within the container, `127.0.0.1` is the container's own loopback, not the host's. The forwarder must listen on an address the container can route to — a Docker bridge gateway — and `LNBITS_URL` must point at that gateway. The override above pins a network so the gateway address is deterministic (`172.28.0.1`). Bind the forwarder's **listen** side to `172.28.0.1:5000`, leave the Tor SOCKS side on `127.0.0.1:9050`, and set `LNBITS_URL=http://172.28.0.1:5000`. Do **not** bind the forwarder to `0.0.0.0`, and do **not** open its port in the firewall — it should be reachable only from the Docker network. (If you would rather not define a custom subnet, the default bridge gateway `172.17.0.1` works too; pinning the subnet just fixes the address instead of relying on Docker's default.)
+
+**2. The default fetch timeout is tuned for a local node, not a Tor hop.** Every HTTP call to the Lightning backend has a deadline set by `LIGHTNING_FETCH_TIMEOUT_MS` (default `8000`; see §5). Reaching LNbits over a Tor circuit adds latency and jitter, so raise it — `15000` is a reasonable start. The shipped `docker-compose.yml` does **not** list this variable in the `void` service's `environment:` block, so setting it in `.env` alone will not reach the container: Compose only forwards variables the service explicitly declares. The override above adds it.
+
+After bring-up, confirm the effective-config log shows the LNbits backend and your raised timeout (§4f), and that `POST /api/paywall/invoice` returns a real `lnbc…` invoice string.
+
 #### BTCPay Server Setup
 
 Use BTCPay when you want a more full-featured self-hosted payment backend.
