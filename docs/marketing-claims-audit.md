@@ -9,7 +9,18 @@ recurring marketing-audit process to scope "what changed since the last audit."
 When a new audit pass closes, update both the HTML comment marker above and the
 date on this line, and record the pass below.
 
-Most recent pass: Task #1084 (2026-07-03) — bumped the product version label
+Most recent pass: Task #1085 (2026-07-03) — extended the Task #1084 stateless
+correction into the operator/store-facing self-host copy, which still promised a
+clean wipe on restart. `umbrel-app.yml` ("live in process memory only — restart
+equals clean slate"; upgrade block "no on-disk room state") and `README-selfhost.md`
+(StartOS config-volume paragraph, §8 "Updating", §10 "database to back up" / "Does
+restarting kill active rooms", and the backup-posture checklist item) all now
+state that volatile per-socket state dies on restart while a minimal paid-room
+metadata snapshot (`data/rooms.json`, never room content) is rehydrated so a paid
+host who refreshes mid-window need not re-pay — consistent with
+`VOID_TECHNICAL_OVERVIEW.md` §3.5 / §13.2. See the "Self-host operator copy"
+section below.
+Prior pass: Task #1084 (2026-07-03) — bumped the product version label
 from `OPEN BETA · v0.5` to `OPEN BETA · v0.6` across all user-facing surfaces,
 and corrected the "stateless" marketing claim to the accurate "no accounts and
 no room content stored" / "ephemeral" wording. Literal statelessness is an
@@ -275,6 +286,33 @@ protocol version stays v1.
 | Landing page carries the verbatim badge `OPEN BETA · v0.6` near the V[]ID hero. | Task #323 brief; the launch checklist top-of-file version-label field; `ThreatModelPage` won't-fix section heading (Task #319). | OK | Truth-claim: this is the first publicly-supported release; we expect to find bugs in the first 90 days; we are committed to fixing them publicly. Pinned by `artifacts/void-client/src/__tests__/v05OpenBetaLabel.test.tsx` with a loud failure message: *"If you are renaming v0.5 to v0.6 / v1.0, update the internal launch checklist, the threat-model won't-fix section, and the marketing-claims-audit ledger together."* The PWA install prompt carries the same `(OPEN BETA · v0.6)` label so installed-app users see consistent framing. Cross-link: the launch checklist (#316), `ThreatModelPage` won't-fix (#319). |
 | ThreatModelPage header carries a one-line v0.6 acknowledgement matching the landing-page label. | Same. | OK | Tone match: the existing won't-fix paragraph from #319 is the reference voice. The won't-fix section heading already says "WHAT VOID WON'T FIX IN v0.6" — this header line keeps the framing consistent for first-time readers who land directly on the page. Pinned by the same regression test. |
 | WhyPage carries the standardized one-sentence acknowledgement: *"This is OPEN BETA · v0.6 — We expect to find bugs for a while."* | Same; Task #565 standardized the sentence across the WhyPage, ThreatModelPage header, Docs → How It Works, and Docs → Threat Model pages. | OK | Single sentence, not a banner. The same verbatim sentence is now rendered on all four pages so the open-beta framing reads identically wherever a user lands. Pinned by the same regression test (which asserts the OPEN BETA / v0.6 tokens, satisfied by the new sentence). |
+
+### Self-host operator copy — `umbrel-app.yml`, `manifest.yaml`, `README-selfhost.md` (Task #1085)
+
+Task #1084 corrected the user-facing "stateless" adjective but left a matching
+persistence overclaim in the operator/store-facing copy: the Umbrel/StartOS
+listing and the self-host runbook still told operators that a restart is a clean
+slate with nothing on disk. That contradicts the canonical truth in
+`VOID_TECHNICAL_OVERVIEW.md` §3.5 / §13.2, which document a minimal paid-room
+metadata snapshot (`data/rooms.json` via `roomsPersistence.ts` — paid window,
+tier, room type, `relayOnly` / `locked` moderation flags, and
+`hostReclaimTokenHashes`; never room content and nothing payment-derived) that is
+rehydrated across a `SIGTERM` → restart cycle so a paid host who refreshes
+mid-window need not re-pay. Task #1085 reconciled the operator copy: volatile
+per-socket state (peers, sockets, pending knocks, recovery codes, ephemeral JWT
+secret) still dies on restart, but the paid-room snapshot survives within its
+paid TTL (≤ 24 h) and is then dropped.
+
+| Claim | Source | Status | Note |
+|---|---|---|---|
+| ~~`umbrel-app.yml` description: rooms "live in process memory only — restart equals clean slate."~~ → now: live per-socket state is in memory and dies on restart; the only thing on disk is a minimal paid-room metadata snapshot (never room content or payment identifiers) rehydrated so a paid host need not re-pay, dropped when the paid window expires. | Tech overview §3.5 / §13.2; `roomsPersistence.ts` | TIGHTENED | Task #1085. "Clean slate on restart" is an overclaim — paid-room metadata is rehydrated across restart. |
+| ~~`umbrel-app.yml` upgrade block: in-flight rooms terminate ephemerally, "no database, no on-disk room state," peers "rejoin a fresh room."~~ → now: volatile per-socket state is lost, but the paid-room metadata snapshot persists to disk and is rehydrated so a paid host need not re-pay; there is no accounts/user database and no schema migration. | Tech overview §3.5 / §13.2 | TIGHTENED | Task #1085. Same overclaim in the upgrade-behavior manifest text. |
+| ~~`manifest.yaml` (StartOS) short/long description: "Stateless … live in process memory only — restart equals clean slate"; upgrade block "no database, no on-disk room state."~~ → now: mirrors the `umbrel-app.yml` wording — "Ephemeral" adjective, volatile per-socket state dies on restart, paid-room metadata snapshot persists and is rehydrated (never room content). | Tech overview §3.5 / §13.2 | TIGHTENED | Task #1085. The StartOS listing carried the identical clean-slate overclaim (and still said "Stateless"); aligned with Umbrel. |
+| ~~`README-selfhost.md` StartOS config-volume paragraph: room state "wiped on restart, so the stateless posture is unchanged."~~ → now: the data volume holds the config file plus the paid-room metadata snapshot (`data/rooms.json`); only volatile per-socket state, recovery codes, and the JWT secret are wiped; posture = "no accounts and no room-content storage." | Tech overview §3.5 / §13.2 | TIGHTENED | Task #1085. |
+| ~~`README-selfhost.md` §8 Updating: "a stateless app … No data to preserve."~~ → now: "an app with almost no state … the only thing on disk is the paid-room metadata snapshot, which the server rehydrates itself." | Tech overview §3.5 / §13.2 | TIGHTENED | Task #1085. |
+| ~~`README-selfhost.md` §10 "Is there a database to back up?" → "No. There is no room database…"~~ → now: no database, but names the single paid-room metadata snapshot as the only server-written state (self-managed, dropped at window expiry). | Tech overview §3.5 / §13.2 | TIGHTENED | Task #1085. |
+| ~~`README-selfhost.md` §10 "Does restarting the server kill active rooms?" → "A restart is a clean slate."~~ → now: volatile per-socket state does not survive, but the paid-room metadata snapshot is rehydrated so a paid host need not re-pay — "not a full clean slate for paid rooms; a clean slate for everything volatile." | Tech overview §3.5 / §13.2 | TIGHTENED | Task #1085. This line was the most direct "clean slate" overclaim. |
+| ~~`README-selfhost.md` checklist item 9: "Backup posture: intentionally none — there is no persistent room/user state."~~ → now: "intentionally minimal" — names the short-lived paid-room snapshot as the only server-written state (not worth backing up; a lost snapshot only means a mid-window host may re-pay); no accounts/user database. | Tech overview §3.5 / §13.2 | TIGHTENED | Task #1085. |
 
 ### WATCH list — claims correct today, but adjacent to active drift
 

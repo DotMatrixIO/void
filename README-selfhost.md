@@ -961,7 +961,7 @@ The repo includes a `manifest.yaml` intended for StartOS / Start9 packaging. The
 
 You do **not** edit env vars by hand on StartOS. The manifest ships a `config` surface (`config_spec.yaml` / `config_rules.yaml` under the package `assets/`, driven by the StartOS `compat` image's `config get` / `config set` procedures) that renders as the package **Config** screen (Settings → Config). Every variable listed above has a field there — Lightning backend selector, paywall secret (masked), the LNbits/BTCPay credential groups, TURN URL/secret, TTL, STUN, trust-proxy hops, log level, the ntfy alert triplet, the Tor-only toggle, and the jitter bounds. Defaults shown in the UI match the code (`TURN_CREDENTIAL_TTL` 4500, jitter 10000/60000 ms, `TRUST_PROXY_HOPS` 1, `LOG_LEVEL` warn).
 
-What you enter is validated by `config set`, persisted to `/root/start9/config.yaml` on the package's `main` data volume, and bridged into the container environment at boot by `deploy/startos/docker_entrypoint.mjs` (the `main` action's entrypoint): it reads that file, exports each field as the matching UPPER_SNAKE_CASE env var, and then imports the server. This data volume holds **only** that config file — room state, recovery codes, and the JWT secret stay in process memory and are wiped on restart, so the stateless posture is unchanged. Plain-Docker / Umbrel deployments do not use this entrypoint; they get their environment from `docker-compose.yml` directly.
+What you enter is validated by `config set`, persisted to `/root/start9/config.yaml` on the package's `main` data volume, and bridged into the container environment at boot by `deploy/startos/docker_entrypoint.mjs` (the `main` action's entrypoint): it reads that file, exports each field as the matching UPPER_SNAKE_CASE env var, and then imports the server. This data volume holds that config file; the only other thing VOID writes to disk is a minimal paid-room metadata snapshot (`data/rooms.json` — paid window, tier, room type, moderation flags, host-reclaim tokens; never room content or payment identifiers) that is rehydrated across restart so a paid host who refreshes mid-window need not re-pay, and is dropped once the paid window expires. Volatile per-socket room state, recovery codes, and the JWT secret stay in process memory and are wiped on restart, so the posture — no accounts and no room-content storage — is unchanged. Plain-Docker / Umbrel deployments do not use this entrypoint; they get their environment from `docker-compose.yml` directly.
 
 Practical steps:
 
@@ -1395,7 +1395,7 @@ Then recompute and `diff` exactly as above; an empty diff means your two builds 
 
 ## 8. Updating
 
-One of the genuine pleasures of a stateless app is that updates are boring. There is nothing to migrate. No schema to alter. No data to preserve.
+One of the genuine pleasures of an app with almost no state is that updates are boring. There is nothing to migrate. No schema to alter. The only thing on disk is the minimal paid-room metadata snapshot (`data/rooms.json`), which the server rehydrates itself across a restart so paid hosts keep their window — you do not manage it by hand.
 
 ### Update Flow
 
@@ -1486,7 +1486,7 @@ If you need to dig deeper, use your browser's WebRTC diagnostics and inspect the
 
 ### Is there a database to back up?
 
-No. There is no room database, no user table, no message archive, no call history.
+No database. There is no user table, no message archive, no call history, and no room content. The single piece of server-written state is a minimal paid-room metadata snapshot (`data/rooms.json` — paid window, tier, room type, moderation flags, host-reclaim tokens; never room content), which the server manages itself and drops when the paid window expires; it is not worth backing up, since losing it only means a mid-window host may need to re-pay.
 
 What you should back up: your `.env`, Coturn config, proxy config, certificates, and manifest or package metadata if you maintain your own deployment packaging.
 
@@ -1537,7 +1537,7 @@ If you do not have those things, keep the app at home if you want and run Coturn
 
 ### Does restarting the server kill active rooms?
 
-It removes server room state immediately. Already-established peer-to-peer media may continue briefly because the media path is direct, but the room as a server-side object is gone. A restart is a clean slate. This is by design.
+It drops the live server room state (peers, sockets, pending knocks) immediately. Already-established peer-to-peer media may continue briefly because the media path is direct. Volatile per-socket state does not survive the restart — but a minimal paid-room metadata snapshot (`data/rooms.json` — paid window, tier, room type, moderation flags, host-reclaim tokens; never room content) is rehydrated on startup so a paid host who refreshes mid-window need not re-pay. It is not a full clean slate for paid rooms; it is a clean slate for everything volatile, by design.
 
 ## Appendix A: Production Checklist
 
@@ -1557,7 +1557,7 @@ Before you point DNS at this thing. Run through this list — roughly ordered by
    - `LOGROTATE_CONFIG_PATH` — a path to your installed logrotate config (e.g. `/etc/logrotate.d/void`). The server reads it at startup and derives the effective retention from its `rotate`/`maxage`/frequency directives, confirming the config it documents is the one actually on disk.
 
    When either is set and the effective ceiling exceeds 5 days — or the env value cannot be parsed, or the config path cannot be read or has no `rotate`/`maxage` directive — the server emits a single loud `WARN` line at startup naming the figure and pointing back here. If neither is set the check stays silent (a default deploy does not read arbitrary files). The published ceiling and the check live in `artifacts/api-server/src/lib/logRetention.ts`.
-9. **Backup posture: intentionally none** — there is no persistent room/user state worth backing up (see §10 "Is there a database to back up?"). Document this for whoever inherits the box so a well-meaning operator does not bolt a database onto a stateless system. Back up your `.env`, Coturn config, proxy config, and TLS certificates — that is it.
+9. **Backup posture: intentionally minimal** — the only server-written state is a short-lived paid-room metadata snapshot (`data/rooms.json`, bounded by each room's paid window — at most 24 h — and never room content), which exists so a paid host survives a restart; it is not worth backing up (a lost snapshot only means a mid-window host may need to re-pay) and there is no accounts/user database (see §10 "Is there a database to back up?"). Document this for whoever inherits the box so a well-meaning operator does not bolt a database onto an otherwise content-free system. Back up your `.env`, Coturn config, proxy config, and TLS certificates — that is it.
 10. **Upgrade procedure** — pull, regenerate any built artifacts, restart. Existing peer-to-peer connections continue across the restart: the api-server handles `SIGTERM` gracefully, and because media flows browser-to-browser (or via TURN), in-call peers stay connected while the signaling process cycles. New joins resume once the server is back. Operator-set `PAYWALL_SECRET` and `TURN_SECRET` persist across restarts because they live in your env (not in any package-managed volume), so previously minted host JWTs and TURN credentials remain valid for their TTL.
 
 ## Final Advice
