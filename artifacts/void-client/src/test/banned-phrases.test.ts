@@ -108,6 +108,47 @@ describe("banned marketing phrase detector", () => {
     });
   });
 
+  // "stateless" over-claim guard (Task #1086). Describing VOID as "stateless"
+  // is technically inaccurate — a minimal paid-room metadata snapshot survives
+  // an operator restart (VOID_TECHNICAL_OVERVIEW.md §3.5) — so the accurate
+  // framing is "ephemeral" / "no accounts and no room content stored". This
+  // class of drift shipped unguarded in the root README tagline until the scan
+  // was extended to cover it. These cases lock in that a bare "stateless"
+  // adjective is flagged while the legitimate component-scoped technical terms
+  // that appear in the docs pages stay sayable.
+  describe("stateless over-claim coverage", () => {
+    it("flags a bare stateless product claim", () => {
+      const banned = [
+        "Stateless, end-to-end encrypted P2P video over Lightning.",
+        "VOID is a stateless, end-to-end encrypted app.",
+        "The room is stateless.",
+        "A stateless system with no persistence.",
+        "One of the pleasures of a stateless app.",
+      ];
+      for (const sample of banned) {
+        expect(
+          scan(sample).map((h) => h.phrase),
+          `expected to flag a stateless over-claim in: ${sample}`,
+        ).toContain("stateless (over-claim — use ephemeral)");
+      }
+    });
+
+    it("allows the legitimate component-scoped technical terms", () => {
+      const allowed = [
+        "STATELESS ARCHITECTURE",
+        "Stateless architecture, log policy, the VOID phrase.",
+        "Stateless JWT authentication.",
+        "A stateless signaling server: brief outages do not interrupt.",
+      ];
+      for (const sample of allowed) {
+        expect(
+          scan(sample).map((h) => h.phrase),
+          `did not expect a stateless flag in: ${sample}`,
+        ).not.toContain("stateless (over-claim — use ephemeral)");
+      }
+    });
+  });
+
   it("matches inflected forms (powerfully, seamlessly, robustness)", () => {
     expect(scan("<p>works powerfully</p>").map((h) => h.phrase)).toContain(
       "powerful",

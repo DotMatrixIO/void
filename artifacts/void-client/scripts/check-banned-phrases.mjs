@@ -18,6 +18,11 @@
  *     intentionally out of scope: they exist to record wording shifts
  *     and would otherwise need allow markers on every quoted phrase.
  *     Added by Task #238.
+ *   - README.md (the repository's top-level README — its tagline and
+ *     overview prose are the first marketing surface anyone reading the
+ *     public repo sees). It was previously unguarded, so an over-claim like
+ *     a bare "stateless" tagline shipped there without any check catching it
+ *     (Task #1086).
  *
  * The canonical phrase list lives in scripts/banned-phrases.mjs. Run via:
  *
@@ -41,6 +46,7 @@ const REPO_ROOT = resolve(__dirname, "..", "..", "..");
 const MANIFEST_FILE = resolve(REPO_ROOT, "manifest.yaml");
 const UMBREL_FILE = resolve(REPO_ROOT, "umbrel-app.yml");
 const README_SELFHOST_FILE = resolve(REPO_ROOT, "README-selfhost.md");
+const README_FILE = resolve(REPO_ROOT, "README.md");
 
 // Recursively collect every .tsx page (excluding *.test.tsx) under PAGES_DIR.
 // The scan used to be a flat, non-recursive readdirSync, which silently
@@ -73,6 +79,7 @@ function main() {
     MANIFEST_FILE,
     UMBREL_FILE,
     README_SELFHOST_FILE,
+    README_FILE,
   ];
   const allViolations = [];
 

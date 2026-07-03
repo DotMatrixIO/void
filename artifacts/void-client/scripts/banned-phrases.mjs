@@ -69,10 +69,39 @@ const MEDIA_OVER_TOR = new RegExp(
 const GRANT_NLNET = /\bnlnet\b/i;
 const GRANT_NGI_ZERO = /\bngi[-\s]?(?:zero|0)\b/i;
 
+// "stateless" over-claim (Task #1086). Describing VOID as "stateless" is a
+// technically-inaccurate over-claim: the server keeps a minimal paid-room
+// metadata snapshot (data/rooms.json — host payment hashes, paid window, tier,
+// room type, relay/lock flags; never room content or peer identities) that
+// SURVIVES an operator restart so a host who refreshes mid-window need not
+// re-pay (VOID_TECHNICAL_OVERVIEW.md §3.5). The accurate framing is
+// "ephemeral" / "no accounts and no room content stored". This is exactly the
+// class of drift that shipped unguarded in the root README tagline
+// ("Stateless, …") because the marketing-voice guards did not scan it.
+//
+// The rule fires on a bare "stateless" adjective and only excludes the
+// legitimate component-scoped technical terms that genuinely appear in the
+// docs pages: "stateless architecture" (the how-it-works section + its
+// "stateless-architecture" anchor id), "stateless JWT (authentication)", and
+// "stateless signaling (server)". The separator before the excused noun may be
+// whitespace or a hyphen so the anchor id ("stateless-architecture") is
+// excused too, and an optional trailing "s" + word boundary excuses the
+// plurals ("stateless servers") while still catching a bare "stateless
+// serverless" bypass. Any other use — "Stateless, end-to-end encrypted",
+// "VOID is a stateless app", "a stateless system" — is an over-claim. For a
+// genuinely legitimate exception add a `banned-phrase-allow:` marker with a
+// reason.
+const STATELESS_OVERCLAIM =
+  /\bstateless\b(?![-\s]+(?:architecture|jwt|signaling|server)s?\b)/i;
+
 export const BANNED_PHRASES = [
   { label: "grant-application name (NLnet)", pattern: GRANT_NLNET },
   { label: "grant-application name (NGI Zero)", pattern: GRANT_NGI_ZERO },
   { label: "media routed over Tor", pattern: MEDIA_OVER_TOR },
+  {
+    label: "stateless (over-claim — use ephemeral)",
+    pattern: STATELESS_OVERCLAIM,
+  },
   { label: "powerful", pattern: /\bpowerful\w*\b/i },
   { label: "seamless", pattern: /\bseamless\w*\b/i },
   { label: "robust", pattern: /\brobust\w*\b/i },

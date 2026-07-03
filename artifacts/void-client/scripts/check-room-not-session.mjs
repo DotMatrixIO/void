@@ -92,6 +92,10 @@ const EXTRA_FILES = [
   resolve(REPO_ROOT, "manifest.yaml"),
   resolve(REPO_ROOT, "umbrel-app.yml"),
   resolve(REPO_ROOT, "README-selfhost.md"),
+  // The repository's top-level README — its tagline and overview prose are the
+  // first surface a public-repo reader sees. Kept in lockstep with the sibling
+  // check-banned-phrases.mjs scan set (Task #1086).
+  resolve(REPO_ROOT, "README.md"),
 ];
 
 // Standalone, all-caps "SESSION". Case-sensitive on purpose — see header.

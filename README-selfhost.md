@@ -1407,7 +1407,11 @@ Then recompute and `diff` exactly as above; an empty diff means your two builds 
 
 ## 8. Updating
 
+<<<<<<< HEAD
 One of the genuine pleasures of an app with almost no state is that updates are boring. There is nothing to migrate. No schema to alter. The only thing on disk is the minimal paid-room metadata snapshot (`data/rooms.json`), which the server rehydrates itself across a restart so paid hosts keep their window — you do not manage it by hand.
+=======
+One of the genuine pleasures of an ephemeral app is that updates are boring. There is nothing to migrate. No schema to alter. No data to preserve.
+>>>>>>> 85b4d310 (Guard the root README against over-claiming marketing copy)
 
 ### Update Flow
 
@@ -1569,7 +1573,11 @@ Before you point DNS at this thing. Run through this list — roughly ordered by
    - `LOGROTATE_CONFIG_PATH` — a path to your installed logrotate config (e.g. `/etc/logrotate.d/void`). The server reads it at startup and derives the effective retention from its `rotate`/`maxage`/frequency directives, confirming the config it documents is the one actually on disk.
 
    When either is set and the effective ceiling exceeds 5 days — or the env value cannot be parsed, or the config path cannot be read or has no `rotate`/`maxage` directive — the server emits a single loud `WARN` line at startup naming the figure and pointing back here. If neither is set the check stays silent (a default deploy does not read arbitrary files). The published ceiling and the check live in `artifacts/api-server/src/lib/logRetention.ts`.
+<<<<<<< HEAD
 9. **Backup posture: intentionally minimal** — the only server-written state is a short-lived paid-room metadata snapshot (`data/rooms.json`, bounded by each room's paid window — at most 24 h — and never room content), which exists so a paid host survives a restart; it is not worth backing up (a lost snapshot only means a mid-window host may need to re-pay) and there is no accounts/user database (see §10 "Is there a database to back up?"). Document this for whoever inherits the box so a well-meaning operator does not bolt a database onto an otherwise content-free system. Back up your `.env`, Coturn config, proxy config, and TLS certificates — that is it.
+=======
+9. **Backup posture: intentionally none** — there is no persistent room/user state worth backing up (see §10 "Is there a database to back up?"). Document this for whoever inherits the box so a well-meaning operator does not bolt a database onto an ephemeral system. Back up your `.env`, Coturn config, proxy config, and TLS certificates — that is it.
+>>>>>>> 85b4d310 (Guard the root README against over-claiming marketing copy)
 10. **Upgrade procedure** — pull, regenerate any built artifacts, restart. Existing peer-to-peer connections continue across the restart: the api-server handles `SIGTERM` gracefully, and because media flows browser-to-browser (or via TURN), in-call peers stay connected while the signaling process cycles. New joins resume once the server is back. Operator-set `PAYWALL_SECRET` and `TURN_SECRET` persist across restarts because they live in your env (not in any package-managed volume), so previously minted host JWTs and TURN credentials remain valid for their TTL.
 
 ## Final Advice
