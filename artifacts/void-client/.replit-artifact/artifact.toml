@@ -127,22 +127,6 @@ from = "/*"
 to = "/index.html"
 # END GENERATED OG REWRITES
 
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
 [services.env]
 PORT = "24363"
 BASE_PATH = "/"

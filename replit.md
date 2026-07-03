@@ -286,11 +286,13 @@ All geometry is absolutely positioned with `pointerEvents: none`:
 - `docs/incident-response.md` — Launch-window runbook (Task #317). Four scenarios — Lightning backend down, signaling-server crash mid-session, room spam/abuse, bad-faith participant recording — plus a catch-all section. Each scenario carries Symptom → Immediate triage commands → send-ready user-facing comms drafts (status banner, Nostr/tweet, longer write-up) → Mitigation actions → "What this surfaces about VOID" line that maps to a `ThreatModelPage` paragraph or won't-fix item. Comms-and-ops doc; not engineering work on the underlying weaknesses.
 - CORS auto-allows all origins when `SERVE_STATIC=1` (self-hosted mode)
 
-## CI — Docker Build Verification
+## CI — Self-host container build & smoke
 
-- `.github/workflows/docker-build.yml` — GitHub Actions workflow triggered on push/PR to `main` when Docker-relevant files change
-- Builds the Docker image, starts a container, and verifies HTTP 2xx response on port 3000
-- Catches Dockerfile path/reference regressions automatically
+- `.github/workflows/docker-build.yml` — GitHub Actions workflow triggered on push/PR to `main` when Docker/build-input files change (`Dockerfile`, `docker-compose.yml`, `.dockerignore`, the lockfile/workspace manifests, `artifacts/void-client/**`, `artifacts/api-server/**`, `lib/**`, `docs/**`, `VOID_TECHNICAL_OVERVIEW.md`), plus a nightly run and manual `workflow_dispatch`.
+- Reproduces the canonical self-host path (`docker compose up -d --build`) from a **fresh checkout**: the build context is a `git archive` of `HEAD` (only committed files), so an under-copied build input or reliance on an untracked/generated file fails loudly — the same class of silent breakage (corepack signing-key rotation, missing `docs/`/`tsconfig.base.json`/`lib/` sources, missing workspace `package.json` manifests) that previously only surfaced when a human ran the compose build by hand.
+- Writes a clearnet Quick Start `.env` (`NODE_ENV=development`) so the onion-bake guard relaxes and no `.onion` host is required; the container still **runs** as `NODE_ENV=production` (hardcoded in compose).
+- Asserts **serving**, not just booting: `GET /api/health` returns 200, root serves the real app shell (`<div id="root">`), and the referenced hashed `/assets/*.js` entry bundle loads non-empty — catching a build that succeeds but ships a broken/empty frontend.
+- Keeps the non-root runtime guard (audit §7.1): live PID 1, `docker exec id`, and a fresh launch of the built image must all run as `node`.
 
 ## CI — API Spec Drift Check
 

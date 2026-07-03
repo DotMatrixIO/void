@@ -1,4 +1,28 @@
-name: Docker Build Verification
+name: Self-host container build & smoke
+
+# Reproduces the canonical self-host path — `docker compose up -d --build`
+# from a FRESH CHECKOUT serving at localhost:3000 with only `.env` edits
+# (see README-selfhost.md §3/§5) — and asserts the stack actually builds AND
+# serves. This is the class of breakage that only ever surfaced when a human
+# ran the compose build by hand: corepack signing-key rotation, under-copied
+# frontend build inputs (docs/, tsconfig.base.json, lib/ sources), and missing
+# workspace package.json manifests. None of those failed any other CI job.
+#
+# Two deliberate teeth beyond a plain `docker build`:
+#   1. The build context is a `git archive` of HEAD — i.e. ONLY committed
+#      files, exactly what a self-hoster clones. A normal working-tree build
+#      can silently rely on untracked/generated files (a stray dist/, a
+#      generated tsconfig) that a fresh clone would not have, and pass anyway.
+#   2. The smoke test asserts SERVING, not just booting: root must return the
+#      real app shell AND the referenced hashed JS bundle must load non-empty,
+#      catching a build that succeeds but ships a broken/empty frontend.
+#
+# NODE_ENV=development is written into the clean checkout's `.env` so the build
+# takes the clearnet Quick Start path and the onion-bake guard relaxes — no
+# `.onion` mirror host is required for CI (see docker-compose.yml build args
+# and artifacts/void-client/vite.config.ts). The container still RUNS as
+# NODE_ENV=production (hardcoded in compose), so this also exercises the real
+# hardened runtime posture.
 
 on:
   push:
@@ -6,38 +30,51 @@ on:
     paths:
       - "Dockerfile"
       - "docker-compose.yml"
-      - "artifacts/**"
-      - "lib/**"
-      - "attached_assets/**"
-      - "package.json"
-      - "pnpm-workspace.yaml"
+      - ".dockerignore"
       - "pnpm-lock.yaml"
+      - "pnpm-workspace.yaml"
+      - "package.json"
       - "tsconfig.json"
       - "tsconfig.base.json"
+      - "artifacts/void-client/**"
+      - "artifacts/api-server/**"
+      - "lib/**"
+      - "docs/**"
+      - "VOID_TECHNICAL_OVERVIEW.md"
       - ".github/workflows/docker-build.yml"
   pull_request:
     branches: [main]
     paths:
       - "Dockerfile"
       - "docker-compose.yml"
-      - "artifacts/**"
-      - "lib/**"
-      - "attached_assets/**"
-      - "package.json"
-      - "pnpm-workspace.yaml"
+      - ".dockerignore"
       - "pnpm-lock.yaml"
+      - "pnpm-workspace.yaml"
+      - "package.json"
       - "tsconfig.json"
       - "tsconfig.base.json"
+      - "artifacts/void-client/**"
+      - "artifacts/api-server/**"
+      - "lib/**"
+      - "docs/**"
+      - "VOID_TECHNICAL_OVERVIEW.md"
       - ".github/workflows/docker-build.yml"
+  # A full container build-and-boot is slow, so it is path-filtered above to
+  # stay off the hot path of doc-only / unrelated PRs. The nightly run catches
+  # drift from things a path filter can't see — e.g. the corepack/pnpm signing
+  # keys or the pinned base image moving under us between merges.
+  schedule:
+    - cron: "17 6 * * *"
+  workflow_dispatch: {}
 
 permissions:
   contents: read
 
 jobs:
-  docker-build:
-    name: Build & Smoke-test Docker image
+  selfhost-build-smoke:
+    name: Build & smoke-test the self-host stack (clean context)
     runs-on: ubuntu-latest
-    timeout-minutes: 15
+    timeout-minutes: 30
 
     steps:
       - name: Checkout repository
@@ -46,90 +83,144 @@ jobs:
       - name: Set up Docker Buildx
         uses: docker/setup-buildx-action@v3
 
-      - name: Build Docker image
-        uses: docker/build-push-action@v6
-        with:
-          context: .
-          load: true
-          tags: void-app:ci
-          cache-from: type=gha,scope=docker-${{ github.ref_name }}
-          cache-to: type=gha,scope=docker-${{ github.ref_name }},mode=max
-
-      - name: Verify runtime user is non-root (fresh container)
+      - name: Materialize a fresh checkout (git archive of HEAD)
         run: |
-          # Regression guard for task #173 / audit §7.1: a misordered
-          # Dockerfile (moved CMD, added "USER root" debug line, new final
-          # stage, etc.) could silently re-elevate the API process to root
-          # even with "USER node" still present somewhere in the file.
-          # Override CMD with `id -un` so we read the *effective* runtime
-          # user the image would launch as.
-          USER_NAME=$(docker run --rm --entrypoint id void-app:ci -un)
-          echo "Image runtime user (fresh container): $USER_NAME"
-          if [ "$USER_NAME" != "node" ]; then
-            echo "::error::Production image runtime user is '$USER_NAME', expected 'node'."
-            echo "::error::The Dockerfile may have re-elevated to root. See docs/security-audit-public-2026-04.md §7.1."
-            exit 1
-          fi
+          # Build from ONLY committed files, exactly what a self-hoster gets
+          # from `git clone`. This is what gives the "clean context" teeth:
+          # anything the Dockerfile relies on that is untracked/generated in
+          # the working tree is absent here, so an under-copy fails loudly.
+          rm -rf /tmp/void-clean
+          mkdir -p /tmp/void-clean
+          git archive --format=tar HEAD | tar -x -C /tmp/void-clean
+          # Sanity: the archive must actually contain the build entrypoints,
+          # or every downstream step would fail for a confusing reason.
+          for f in Dockerfile docker-compose.yml .dockerignore; do
+            if [ ! -f "/tmp/void-clean/$f" ]; then
+              echo "::error::git archive is missing $f — cannot reproduce a fresh checkout."
+              exit 1
+            fi
+          done
 
-      - name: Start container
+      - name: Write clearnet Quick Start .env
         run: |
-          docker run -d \
-            --name void-ci \
-            -p 3000:3000 \
-            -e PORT=3000 \
-            -e NODE_ENV=production \
-            -e SERVE_STATIC=1 \
-            -e CLIENT_DIST=./client \
-            -e LIGHTNING_BACKEND=mock \
-            void-app:ci
+          # Mirrors README-selfhost.md's Quick Start: NODE_ENV=development in
+          # .env relaxes the onion-bake guard for a clearnet-only smoke build,
+          # so no .onion mirror host is required in CI. LIGHTNING_BACKEND=mock
+          # keeps the paywall out of the boot path.
+          cat > /tmp/void-clean/.env <<'EOF'
+          NODE_ENV=development
+          LIGHTNING_BACKEND=mock
+          EOF
 
-      - name: Wait for server to be ready
+      - name: Build & boot the stack (docker compose up --build)
+        working-directory: /tmp/void-clean
         run: |
-          echo "Waiting for health endpoint on port 3000..."
-          for i in $(seq 1 30); do
+          # Only the `void` service is brought up: `coturn` is a stock upstream
+          # image (network_mode: host) that exercises none of our build path
+          # and would add flakiness. Building/booting `void` is what validates
+          # the Dockerfile, the compose build-arg wiring, and first-run serve.
+          docker compose up -d --build void
+
+      - name: Wait for the health endpoint
+        run: |
+          echo "Waiting for http://localhost:3000/api/health ..."
+          ok=""
+          for i in $(seq 1 60); do
             if curl -sf http://localhost:3000/api/health | grep -q '"status":"ok"'; then
               echo "Health check passed on attempt $i"
-              exit 0
+              ok=1
+              break
             fi
-            sleep 1
+            sleep 2
           done
-          echo "Server did not become healthy within 30 seconds"
-          docker logs void-ci
-          exit 1
-
-      - name: Verify runtime user is non-root (live container)
-        run: |
-          # Belt-and-suspenders to the fresh-container check above: confirm
-          # the *actually running* server process — not just `id` — is owned
-          # by the `node` user. Catches a hypothetical entrypoint script
-          # that re-elevates via su/sudo at runtime.
-          EXEC_USER=$(docker exec void-ci id -un)
-          PS_USER=$(docker exec void-ci ps -o user= -p 1 | tr -d ' ')
-          echo "Live container id -un: $EXEC_USER"
-          echo "Live container PID 1 user: $PS_USER"
-          if [ "$EXEC_USER" != "node" ] || [ "$PS_USER" != "node" ]; then
-            echo "::error::Live container is running as '$EXEC_USER' (PID 1: '$PS_USER'), expected 'node'."
-            echo "::error::See docs/security-audit-public-2026-04.md §7.1."
-            docker logs void-ci
+          if [ "$ok" != "1" ]; then
+            echo "::error::Server did not become healthy within ~120s."
+            (cd /tmp/void-clean && docker compose logs void) || true
             exit 1
           fi
 
-      - name: Verify HTTP response
+      - name: Assert the API health response is 200
         run: |
           STATUS=$(curl -s -o /dev/null -w "%{http_code}" http://localhost:3000/api/health)
           BODY=$(curl -s http://localhost:3000/api/health)
-          echo "HTTP status: $STATUS"
-          echo "Response body: $BODY"
+          echo "GET /api/health -> $STATUS"
+          echo "Body: $BODY"
           if [ "$STATUS" -ne 200 ]; then
-            echo "Unexpected HTTP status code: $STATUS"
-            docker logs void-ci
+            echo "::error::GET /api/health returned $STATUS, expected 200."
+            (cd /tmp/void-clean && docker compose logs void) || true
+            exit 1
+          fi
+
+      - name: Assert root serves the real app (not an empty bundle)
+        run: |
+          # Booting proves the API came up; the under-copy failures actually
+          # break the FRONTEND build (missing docs/, tsconfig.base.json, lib/
+          # sources), so we also assert the app shell is served AND its hashed
+          # entry bundle loads non-empty. A build that succeeds but ships a
+          # broken/empty frontend fails here rather than reaching users.
+          ROOT_STATUS=$(curl -s -o /tmp/index.html -w "%{http_code}" http://localhost:3000/)
+          echo "GET / -> $ROOT_STATUS"
+          if [ "$ROOT_STATUS" -ne 200 ]; then
+            echo "::error::GET / returned $ROOT_STATUS, expected 200."
+            (cd /tmp/void-clean && docker compose logs void) || true
+            exit 1
+          fi
+          if ! grep -q 'id="root"' /tmp/index.html; then
+            echo "::error::Served HTML has no <div id=\"root\"> — the app shell was not served."
+            head -c 2000 /tmp/index.html
+            exit 1
+          fi
+          # The production build rewrites /src/main.tsx into a hashed asset. If
+          # the frontend bundle is missing/empty there will be no /assets/*.js
+          # reference at all.
+          ASSET=$(grep -oE '/assets/[A-Za-z0-9._-]+\.js' /tmp/index.html | head -1)
+          if [ -z "$ASSET" ]; then
+            echo "::error::No hashed /assets/*.js entry bundle referenced in the served HTML — frontend build produced an empty/broken bundle."
+            head -c 2000 /tmp/index.html
+            exit 1
+          fi
+          echo "Entry bundle: $ASSET"
+          ASSET_STATUS=$(curl -s -o /tmp/entry.js -w "%{http_code}" "http://localhost:3000$ASSET")
+          ASSET_SIZE=$(wc -c < /tmp/entry.js)
+          echo "GET $ASSET -> $ASSET_STATUS ($ASSET_SIZE bytes)"
+          if [ "$ASSET_STATUS" -ne 200 ]; then
+            echo "::error::Entry bundle $ASSET returned $ASSET_STATUS, expected 200."
+            exit 1
+          fi
+          if [ "$ASSET_SIZE" -lt 1000 ]; then
+            echo "::error::Entry bundle $ASSET is only $ASSET_SIZE bytes — frontend bundle looks empty/broken."
+            exit 1
+          fi
+
+      - name: Verify runtime user is non-root
+        run: |
+          # Regression guard for audit §7.1: a misordered Dockerfile could
+          # silently re-elevate the API process to root even with "USER node"
+          # still present. Check both the running process and a fresh launch of
+          # the same image. See docs/security-audit-public-2026-04.md §7.1.
+          CID=$(cd /tmp/void-clean && docker compose ps -q void)
+          if [ -z "$CID" ]; then
+            echo "::error::Could not resolve the running void container id."
+            exit 1
+          fi
+          EXEC_USER=$(docker exec "$CID" id -un)
+          PS_USER=$(docker exec "$CID" ps -o user= -p 1 | tr -d ' ')
+          IMAGE_ID=$(docker inspect -f '{{.Image}}' "$CID")
+          FRESH_USER=$(docker run --rm --entrypoint id "$IMAGE_ID" -un)
+          echo "Live container id -un: $EXEC_USER"
+          echo "Live container PID 1 user: $PS_USER"
+          echo "Fresh container id -un: $FRESH_USER"
+          if [ "$EXEC_USER" != "node" ] || [ "$PS_USER" != "node" ] || [ "$FRESH_USER" != "node" ]; then
+            echo "::error::Container is not running as 'node' (live: '$EXEC_USER', PID1: '$PS_USER', fresh: '$FRESH_USER')."
+            echo "::error::The Dockerfile may have re-elevated to root. See docs/security-audit-public-2026-04.md §7.1."
+            (cd /tmp/void-clean && docker compose logs void) || true
             exit 1
           fi
 
       - name: Print container logs
         if: always()
-        run: docker logs void-ci 2>&1 || true
+        run: (cd /tmp/void-clean && docker compose logs void) 2>&1 || true
 
-      - name: Cleanup
+      - name: Tear down
         if: always()
-        run: docker rm -f void-ci 2>/dev/null || true
+        run: (cd /tmp/void-clean && docker compose down -v) 2>/dev/null || true
