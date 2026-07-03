@@ -381,6 +381,12 @@ jobs:
           apt-get update
           apt-get install -y --no-install-recommends git ca-certificates curl xxd
           rm -rf /var/lib/apt/lists/*
+          # node:22.12.0-slim bundles corepack 0.29.4, which predates pnpm's
+          # npm registry signing-key rotation and fails `corepack prepare`
+          # with "Cannot find matching keyid". Pin a corepack carrying the
+          # rotated keys (updated upstream in 0.31.0) first, keeping signature
+          # verification intact. Must match the Dockerfile's corepack pin.
+          npm install -g corepack@0.34.5
           corepack enable
           corepack prepare pnpm@10.26.1 --activate
 

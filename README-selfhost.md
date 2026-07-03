@@ -184,6 +184,9 @@ export TURN_SECRET=$(openssl rand -hex 32)
 
 ```bash
 cat > .env <<EOF
+# NODE_ENV here is a BUILD switch: 'development' lets the image build without a
+# Tor .onion mirror address (a clearnet-only smoke build). The running container
+# is always production-hardened regardless of this value — see the note below.
 NODE_ENV=development
 PORT=3000
 SERVE_STATIC=1
@@ -195,13 +198,26 @@ TURN_SECRET=${TURN_SECRET}
 EOF
 ```
 
-> **Security warning:** When `NODE_ENV` is not `production`, the server exposes a `dev-pay` endpoint that lets anyone settle invoices without paying. This is correct for a local smoke test. It is a serious problem on a public server. Set `NODE_ENV=production` for any public deployment. Do not forget this.
+> **Security warning:** The shipped `docker-compose.yml` runs the container with `NODE_ENV=production` no matter what your `.env` says, so the `dev-pay` endpoint — which would let anyone settle invoices without paying — is **never** exposed by this stack. Safe by default. The `NODE_ENV=development` above only relaxes the build-time onion guard; it does not change the running container. That `dev-pay` endpoint appears only if you run the server yourself in development (for example a non-Docker `pnpm dev`, or by overriding the container's `NODE_ENV`) — never do that on a public host.
 
 ### 5) Start the stack
 
 ```bash
 docker compose up -d --build
 ```
+
+Compose forwards your `.env` `NODE_ENV` into the image **build**, where it drives the onion-bake guard. With the `NODE_ENV=development` from step 4 this first run builds a clearnet-only bundle — **no `.onion` address and no manual edits to `Dockerfile`/`docker-compose.yml` are required.** The running container is always production-hardened (the compose `environment:` block pins the runtime `NODE_ENV=production`, so `dev-pay` stays off — see the security warning in step 4). For a public deployment, see the production note below.
+
+> **Production build note (read before you deploy publicly):** a production bundle (`NODE_ENV=production`) bakes in a Tor `.onion` mirror address and **fails the build closed** if one is missing — so a "Tor-reachable" bundle can never ship with a silently-inert onion link. Before running `docker compose up -d --build` for production, set both in `.env`:
+>
+> ```bash
+> NODE_ENV=production
+> VITE_VOID_ONION_HOST=<your-56-char-base32>.onion
+> ```
+>
+> If you genuinely have no onion mirror yet and only want a clearnet smoke test, keep `NODE_ENV=development` for the build (as in step 4); the guard relaxes only when `NODE_ENV` is not `production`. See §5 "Build-Time Variables" for details.
+
+> **Provenance note:** an image you build locally with Compose passes no git SHA or release tag, so `BUILD_INFO.json` and the `/api/proof/build` + `/api/provenance.json` endpoints report placeholder (`unknown`) provenance. This is expected for a local build. Meaningful, verifiable provenance comes from the signed release path (see "Rebuild from the recipe" and "Verify provenance" below), or by passing `GIT_SHA` / `GIT_SHA_SHORT` / `RELEASE_TAG` / `BUILD_TIMESTAMP` as `--build-arg`s.
 
 ### 6) Verify it is running
 
@@ -501,14 +517,12 @@ Verify:
 
 The verification above assumes LNbits sits at an ordinary `host:port` the container can dial directly. A common sovereign setup breaks that assumption: LNbits runs on a separate node at home (for example a Start9 or Umbrel box) and is reachable only over its Tor `.onion` address. The usual pattern is to run a local forwarder on the VPS — `socat` or similar, listening on a local port and forwarding through the Tor SOCKS proxy to the `.onion` — so the rest of the stack can treat LNbits as a plain local port.
 
-Two traps show up when the VOID app runs under Docker and LNbits is reached this way. Both are handled by a single `docker-compose.override.yml`, which Compose merges automatically, so the tracked `docker-compose.yml` stays clean for `git pull` updates (§8):
+Two traps show up when the VOID app runs under Docker and LNbits is reached this way. The first (a container cannot reach the host's loopback) needs a `docker-compose.override.yml`, which Compose merges automatically, so the tracked `docker-compose.yml` stays clean for `git pull` updates (§8). The second (the fetch timeout) is now just a `.env` value — the shipped `docker-compose.yml` forwards `LIGHTNING_FETCH_TIMEOUT_MS` to the container, so no override is needed for it:
 
 ```yaml
 # docker-compose.override.yml  — local only, do not commit
 services:
   void:
-    environment:
-      LIGHTNING_FETCH_TIMEOUT_MS: ${LIGHTNING_FETCH_TIMEOUT_MS:-15000}
     networks:
       - lnbits
 networks:
@@ -521,7 +535,7 @@ networks:
 
 **1. A container cannot reach the host's `127.0.0.1`.** If the forwarder listens on `127.0.0.1:5000` on the host, `LNBITS_URL=http://127.0.0.1:5000` fails from inside the `void` container: within the container, `127.0.0.1` is the container's own loopback, not the host's. The forwarder must listen on an address the container can route to — a Docker bridge gateway — and `LNBITS_URL` must point at that gateway. The override above pins a network so the gateway address is deterministic (`172.28.0.1`). Bind the forwarder's **listen** side to `172.28.0.1:5000`, leave the Tor SOCKS side on `127.0.0.1:9050`, and set `LNBITS_URL=http://172.28.0.1:5000`. Do **not** bind the forwarder to `0.0.0.0`, and do **not** open its port in the firewall — it should be reachable only from the Docker network. (If you would rather not define a custom subnet, the default bridge gateway `172.17.0.1` works too; pinning the subnet just fixes the address instead of relying on Docker's default.)
 
-**2. The default fetch timeout is tuned for a local node, not a Tor hop.** Every HTTP call to the Lightning backend has a deadline set by `LIGHTNING_FETCH_TIMEOUT_MS` (default `8000`; see §5). Reaching LNbits over a Tor circuit adds latency and jitter, so raise it — `15000` is a reasonable start. The shipped `docker-compose.yml` does **not** list this variable in the `void` service's `environment:` block, so setting it in `.env` alone will not reach the container: Compose only forwards variables the service explicitly declares. The override above adds it.
+**2. The default fetch timeout is tuned for a local node, not a Tor hop.** Every HTTP call to the Lightning backend has a deadline set by `LIGHTNING_FETCH_TIMEOUT_MS` (default `8000`; see §5). Reaching LNbits over a Tor circuit adds latency and jitter, so raise it — `15000` is a reasonable start. The shipped `docker-compose.yml` now lists this variable in the `void` service's `environment:` block, so setting `LIGHTNING_FETCH_TIMEOUT_MS=15000` in `.env` alone reaches the container — no override needed for the timeout. (The override above is only for the network trap.)
 
 After bring-up, confirm the effective-config log shows the LNbits backend and your raised timeout (§4f), and that `POST /api/paywall/invoice` returns a real `lnbc…` invoice string.
 
@@ -843,6 +857,8 @@ These are baked into the Docker image at build time. They are not runtime env va
 | Variable | Required | Typical Value | What It Does | If Unset |
 |---|---|---|---|---|
 | `BASE_PATH` | No | `/` | Frontend asset prefix for subpath deployments. Currently set as `ENV BASE_PATH=/` in the Dockerfile — to change it, edit the Dockerfile or add an `ARG` override in your build pipeline | Defaults to `/` |
+| `VITE_VOID_ONION_HOST` | Required for production builds | `<56-char-base32>.onion` | The Tor v3 `.onion` mirror host baked into the bundle's onion affordance. `docker-compose.yml` forwards it from `.env` as a build arg. Under a production build the onion-bake guard **fails closed** if this is unset or not a valid v3 host, so a "Tor-reachable" bundle can never ship an inert onion link | A production build (`NODE_ENV=production`) **fails**; a non-production build (`NODE_ENV=development`) builds clearnet-only with no onion affordance |
+| `NODE_ENV` (build) | No | `production` (default) or `development` | At build time, selects the canonical production bundle (onion-bake guard ON — requires `VITE_VOID_ONION_HOST`) vs. a clearnet-only smoke-test bundle (`development`, guard relaxed). `docker-compose.yml` forwards your `.env` `NODE_ENV` into the build. The container's runtime `NODE_ENV` is separately pinned to `production` in the compose `environment:` block and is **not** read from `.env`, so a `development` value here only affects the build, never the running container's posture | Defaults to `production` |
 
 ### Room Types
 
@@ -1272,7 +1288,10 @@ git checkout <tag>           # e.g. v1.3.0
 docker run --rm -v "$PWD":/src -w /src "node:22.12.0-slim@${DIGEST}" \
   bash -c '
     apt-get update && apt-get install -y --no-install-recommends git ca-certificates
-    corepack enable && corepack prepare pnpm@10.26.1 --activate
+    # node:22.12.0-slim bundles corepack 0.29.4, which predates pnpm signing-key
+    # rotation and fails with "Cannot find matching keyid". Pin a corepack that
+    # carries the rotated keys first (matches the Dockerfile), then enable it.
+    npm install -g corepack@0.34.5 && corepack enable && corepack prepare pnpm@10.26.1 --activate
     pnpm install --frozen-lockfile --prefer-offline
     NODE_ENV=production PORT=3000 BASE_PATH=/ \
       pnpm --filter @workspace/void-client run build

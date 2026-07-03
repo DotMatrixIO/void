@@ -15,7 +15,15 @@ FROM node:22.12.0-slim@sha256:35531c52ce27b6575d69755c73e65d4468dba93a25644eed56
 # .github/workflows/. A mismatch produces silently-different lockfile
 # resolutions and breaks reproducibility. The release workflow asserts
 # `pnpm --version` matches `packageManager` and fails closed otherwise.
-RUN corepack enable && corepack prepare pnpm@10.26.1 --activate
+# node:22.12.0-slim bundles corepack 0.29.4, which predates pnpm's npm
+# registry signing-key rotation and fails `corepack prepare` with
+# "Internal Error: Cannot find matching keyid". Pin a corepack that carries
+# the rotated keys (updated upstream in corepack 0.31.0) BEFORE enabling it,
+# so package-manager signature verification stays intact — we deliberately
+# do NOT disable it with COREPACK_INTEGRITY_KEYS=0 (a supply-chain
+# regression). Keep this pin in lockstep with the same install in
+# README-selfhost.md's rebuild recipe and .github/workflows/release.yml.
+RUN npm install -g corepack@0.34.5 && corepack enable && corepack prepare pnpm@10.26.1 --activate
 WORKDIR /app
 
 FROM base AS deps
@@ -25,18 +33,50 @@ COPY artifacts/api-server/package.json artifacts/api-server/
 COPY lib/api-zod/package.json lib/api-zod/
 COPY lib/api-spec/package.json lib/api-spec/
 COPY lib/api-client-react/package.json lib/api-client-react/
+# void-client depends on these two workspace packages (workspace:*); their
+# manifests must be present so `pnpm install` creates the node_modules symlinks
+# it resolves at build time. Omitting them leaves @workspace/wire-core and
+# @workspace/signaling-types unresolved when the frontend bundles.
+COPY lib/wire-core/package.json lib/wire-core/
+COPY lib/signaling-types/package.json lib/signaling-types/
 RUN pnpm install --frozen-lockfile --prod=false
 
 FROM deps AS frontend
 COPY artifacts/void-client/ artifacts/void-client/
+# Repo-root build inputs the void-client build reads directly (they are NOT
+# under artifacts/void-client/): sync-fragments.mjs splices
+# docs/_fragments/*.md into VOID_TECHNICAL_OVERVIEW.md, and the `@docs` Vite
+# alias resolves to repo-root docs/ (pages import @docs/_fragments/*.md?raw).
+# Without these the frontend build fails with ENOENT on the fragment files.
+COPY docs/ docs/
+COPY VOID_TECHNICAL_OVERVIEW.md ./
+# artifacts/void-client/tsconfig.json does `extends: "../../tsconfig.base.json"`;
+# esbuild/vite resolve that during the build, so the repo-root base tsconfig
+# must be present or the build fails resolving the "extends" chain.
+COPY tsconfig.base.json ./
+# Source of the workspace packages void-client bundles. Their `exports` map
+# points straight at ./src/index.ts (no prebuilt dist), so Vite compiles them
+# from source and needs the actual sources here — the deps stage only supplied
+# their package.json for symlinking. Vite also parses each symlinked package's
+# tsconfig.json while loading config, so a missing one ENOENTs the build; copy
+# all of lib/ so every resolvable package carries its tsconfig.
+COPY lib/ lib/
 ENV PORT=3000
 ENV BASE_PATH=/
-ENV NODE_ENV=production
+# NODE_ENV defaults to production — the canonical / release build path, where
+# the onion-bake guard below is ON and fails closed on a missing onion host.
+# docker-compose forwards the operator's .env NODE_ENV into this arg so a
+# local clearnet-only smoke test (NODE_ENV=development, the Quick Start) can
+# build without an onion address: the guard relaxes only when NODE_ENV is not
+# "production" (see artifacts/void-client/vite.config.ts).
+ARG NODE_ENV=production
+ENV NODE_ENV=$NODE_ENV
 # Bake the v3 .onion mirror host into the production bundle. The build guard
 # (artifacts/void-client/src/lib/onionHost.ts, wired in vite.config.ts) fails
 # LOUDLY when this is unset/malformed under NODE_ENV=production, so a clearnet
 # release that forgot the onion mirror cannot ship a silently-inert affordance.
-# Supply at build time with: docker build --build-arg VITE_VOID_ONION_HOST=<56-char-base32>.onion
+# docker-compose forwards this from VITE_VOID_ONION_HOST in your .env; for a
+# manual build supply: docker build --build-arg VITE_VOID_ONION_HOST=<56-char-base32>.onion
 ARG VITE_VOID_ONION_HOST=""
 ENV VITE_VOID_ONION_HOST=$VITE_VOID_ONION_HOST
 RUN pnpm --filter @workspace/void-client run build
@@ -64,9 +104,13 @@ ENV BUILD_TIMESTAMP=$BUILD_TIMESTAMP
 COPY --from=frontend /app/artifacts/void-client/dist/public ./artifacts/void-client/dist/public
 ENV CLIENT_DIST_DIR=/app/artifacts/void-client/dist/public
 COPY artifacts/api-server/ artifacts/api-server/
-COPY lib/api-zod/ lib/api-zod/
-COPY lib/api-spec/ lib/api-spec/
-COPY lib/api-client-react/ lib/api-client-react/
+# All workspace lib sources api-server bundles. Their `exports` point at
+# ./src/index.ts (no prebuilt dist), and api-server imports @workspace/wire-core
+# (plus api-zod/api-spec/api-client-react/signaling-types), so esbuild resolves
+# them from source here. Repo-root tsconfig.base.json is the `extends` target of
+# those packages' tsconfig.json — without it esbuild warns and drops its config.
+COPY tsconfig.base.json ./
+COPY lib/ lib/
 RUN pnpm --filter @workspace/api-server run build
 
 FROM node:22.12.0-slim@sha256:35531c52ce27b6575d69755c73e65d4468dba93a25644eed56dc12879cae9213 AS production
