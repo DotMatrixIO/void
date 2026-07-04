@@ -296,6 +296,19 @@ export default function MediaPage() {
               boxSizing: "border-box",
             }}
           >
+            <p
+              style={{
+                margin: 0,
+                textAlign: "center",
+                fontFamily: "var(--font-mono)",
+                fontSize: "13px",
+                lineHeight: 1.7,
+                letterSpacing: "0.3px",
+                color: "#EFE7D6",
+              }}
+            >
+              {"Ephemeral video, nothing retained — no app to install, it opens from a link, up to 4 people over real-time WebRTC."}
+            </p>
             <div
               style={{
                 width: "100%",

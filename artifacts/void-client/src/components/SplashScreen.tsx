@@ -48,7 +48,7 @@ const SCRIPT: Line[] = [
   { at: 4400, group: 4, text: "No transcripts",                           variant: "pillar" },
   { at: 4550, group: 4, text: "No AI summaries",                          variant: "pillar" },
   { at: 4700, group: 4, text: "No call logs",                             variant: "pillar" },
-  { at: 4850, group: 4, text: "No downloads",                             variant: "pillar" },
+  { at: 4850, group: 4, text: "No install",                               variant: "pillar" },
   { at: 5000, group: 4, text: "No records of what was said",              variant: "pillar" },
 
   { at: 5800, group: 5, text: "A CUP OF COFFEE = ONE ROOM",             variant: "price" },

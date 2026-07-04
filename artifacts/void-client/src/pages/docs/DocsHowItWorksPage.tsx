@@ -94,10 +94,14 @@ export default function DocsHowItWorksPage() {
         </p>
         <p style={{ marginBottom: "16px" }}>
           VOID is — technically speaking — an ephemeral, encrypted, peer-to-peer
-          communication channel. No accounts. No recording. No transcript. No
-          record of what was said by whom. This is not because we are
-          trustworthy. It’s because the architecture makes retention
+          communication channel. Nothing about your call is retained on the
+          server: no accounts, no room content stored, no recording, no
+          transcript, no record of what was said by whom. This is not because
+          we are trustworthy. It’s because the architecture makes retention
           impossible. There is a difference.
+        </p>
+        <p style={{ marginBottom: "16px" }}>
+          {"There is no app to install: it opens from a link in your browser, up to 4 people over real-time WebRTC. And because you can self-host the whole thing and verify the build yourself, the browser client is a deliberate architectural choice, not a limitation."}
         </p>
         <p style={{ marginBottom: "16px" }}>
           For instance, there’s no chat or messenger. Instead, there’s a single

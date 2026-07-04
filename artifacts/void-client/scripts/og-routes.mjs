@@ -47,9 +47,9 @@ export const OG_ROUTES = [
   {
     slug: "landing",
     path: "/",
-    title: "VOID | Ephemeral, Zero-Knowledge Video Rooms",
+    title: "VOID | Ephemeral Video Rooms — Opens From a Link",
     description:
-      "Peer-to-peer video. No accounts and no room content stored. No logs. The room burns down when you're done.",
+      "Ephemeral video, nothing retained — no accounts, no room content stored. No app to install: it opens from a link. Up to 4 people over WebRTC.",
     headline:
       "Send anyone a link. They click. You talk. The room burns down.",
     accent: "gold",

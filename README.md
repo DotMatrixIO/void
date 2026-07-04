@@ -1,9 +1,11 @@
 # VOID
 
-Ephemeral, privacy-first peer-to-peer video conferencing.
+Ephemeral, privacy-first peer-to-peer video.
 
-VOID rooms hold up to 4 humans on real-time WebRTC, with no accounts, no
-database rows, and no persistent user content on the server.
+Nothing about your call is retained on the server — no accounts, no room
+content stored. No app to install: VOID opens from a link in your browser.
+Up to 4 people talk over real-time WebRTC, and you can self-host it and
+verify the exact build yourself.
 
 ## Repository Layout
 

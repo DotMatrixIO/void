@@ -128,6 +128,34 @@ const SERVER_OBSERVABLE_FRAGMENT = resolve(
 const SERVER_SEES_HEADING = "WHAT THE SERVER SEES";
 const HIDDEN_AGENT_PHRASE = "hybrid (human plus agent)";
 
+// Canonical "no install — opens from a link" summary surfaces (task-1096).
+// VOID promotes "no app to install; it opens from a link" to a named second
+// property in every headline/summary. Pin a short distinctive fragment of
+// that summary to each surface so a future tone rewrite of one surface can't
+// silently drop the property or let the summaries drift apart. The fragment
+// is a raw-source substring match, so it must sit contiguously on one line.
+const README = resolve(REPO_ROOT, "README.md");
+const INDEX_HTML = resolve(CLIENT_ROOT, "index.html");
+const MANIFEST_JSON = resolve(CLIENT_ROOT, "public", "manifest.json");
+const OG_ROUTES_FILE = resolve(__dirname, "og-routes.mjs");
+const HOW_IT_WORKS_PAGE = resolve(PAGES_DIR, "HowItWorksPage.tsx");
+const PAGE_FOOTER = resolve(COMPONENTS_DIR, "PageFooter.tsx");
+const MEDIA_PAGE = resolve(PAGES_DIR, "MediaPage.tsx");
+const NO_INSTALL_SENTINEL = "opens from a link";
+// gen-og-pages.mjs rewrites index.html's landing meta from og-routes.mjs at
+// build time, so the index.html summary surface legitimately spans both files
+// — accept the sentinel from either via alsoSearch.
+const NO_INSTALL_SURFACES = [
+  { file: README },
+  { file: INDEX_HTML, alsoSearch: [OG_ROUTES_FILE] },
+  { file: MANIFEST_JSON },
+  { file: LANDING_PAGE },
+  { file: HOW_IT_WORKS_PAGE },
+  { file: DOCS_HOW_IT_WORKS_PAGE },
+  { file: PAGE_FOOTER },
+  { file: MEDIA_PAGE },
+];
+
 const violations = [];
 
 function checkRequiredLiteral(file, literal, reason, alsoSearch = []) {
@@ -372,6 +400,15 @@ for (const literal of [
   );
 }
 
+for (const { file, alsoSearch = [] } of NO_INSTALL_SURFACES) {
+  checkRequiredLiteral(
+    file,
+    NO_INSTALL_SENTINEL,
+    'Canonical no-install summary sentinel (task-1096) — every headline/summary surface must keep the "opens from a link" framing so the summaries cannot silently drift apart.',
+    alsoSearch,
+  );
+}
+
 if (violations.length > 0) {
   console.error(
     `Required-literal check failed in ${violations.length} location(s):\n`,
@@ -393,5 +430,5 @@ if (violations.length > 0) {
 }
 
 console.log(
-  "Required-literal check passed: 26 assertion(s) verified across long-form pages, the WHY founder's-note, share affordances, and the BURN overlay.",
+  "Required-literal check passed: all assertions verified across long-form pages, the no-install summary surfaces, the WHY founder's-note, share affordances, and the BURN overlay.",
 );

@@ -246,7 +246,7 @@ export default function LandingPage({
               marginTop: "18px",
             }}
           >
-            Private video rooms
+            Ephemeral rooms · opens from a link, no install · up to 4 people
           </div>
         </div>
 

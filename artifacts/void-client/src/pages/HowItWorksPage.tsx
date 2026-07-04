@@ -39,6 +39,9 @@ export default function HowItWorksPage() {
           people to talk.
         </p>
         <p style={{ margin: "0 0 12px" }}>
+          {"There is no app to install: it opens from a link in your browser. A room holds up to 4 people over real-time WebRTC."}
+        </p>
+        <p style={{ margin: "0 0 12px" }}>
           No accounts. No recording. No transcript. No record of what was
           said by whom.
         </p>
