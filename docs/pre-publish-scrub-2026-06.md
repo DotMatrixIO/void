@@ -471,6 +471,9 @@ node scripts/check-publish-inventory.mjs --snapshot "$PUB"
 #                   rm line was missed/drifted.
 # LFS-RULE-PRESENT -> the shipped .gitattributes still carries a `filter=lfs`
 #                   rule; empty it (the `: > "$PUB/.gitattributes"` step in §3).
+# LARGE-FILE-NOT-ALLOWLISTED -> a file over the size ceiling reached the snapshot
+#                   without being on the reviewed allowlist — see the backstop
+#                   note below.
 # Any non-OK line is a STOP.
 ```
 
@@ -481,6 +484,23 @@ check now also asserts the nested tier — the `aesthetic-audit-shots/` dir and
 `aesthetic-audit.md` doc (the `NESTED_STRIP` list) are absent, and the shipped
 `.gitattributes` carries no Git LFS rule — so the §3 nested `rm` lines and the
 `.gitattributes` emptying can no longer silently drift from enforcement.
+
+**Generic large-file backstop.** `NESTED_STRIP` only stops the internal bloat
+someone already *named* (the `aesthetic-audit-shots/` PNGs). The same fail-open
+lives one level down: a *future* oversized file dropped into any SHIP dir that
+nobody thinks to name would still ship by default. Snapshot mode closes it by
+walking the whole candidate tree and failing (`LARGE-FILE-NOT-ALLOWLISTED`) on
+any file larger than `LARGE_FILE_THRESHOLD_BYTES` (currently **512 KiB**) that is
+not on `LARGE_FILE_ALLOWLIST` in `scripts/publish-inventory-manifest.mjs`. That
+allowlist is a small, reviewed set derived from an audit of the real tracked
+tree — the demo-video media, the landing demo MP4s and posters, `void-icon.png`,
+the design-sandbox backdrop/portraits — so the correctly-scrubbed snapshot still
+passes. Assets under the ceiling (the `screenshots/` editorial hero JPEGs, the
+PWA splash/icon PNGs) need no entry; they pass on size alone. When the failure
+fires, either add the file to `LARGE_FILE_ALLOWLIST` (a deliberate, reviewed act
+— the friction is the point) or strip it via `NESTED_STRIP` and the §3 `rm` list
+if it is internal. Source mode guards the allowlist against rot
+(`STALE-LARGE-FILE-ALLOWLIST`): every listed path must still be a tracked file.
 
 ### 4.3 Git author / committer fields read DotMatrixIO only
 

@@ -31,17 +31,62 @@
 // grep), not here. See docs/pre-publish-scrub-2026-06.md.
 
 import { execFileSync } from "node:child_process";
-import { existsSync, readdirSync, readFileSync } from "node:fs";
-import { join, dirname } from "node:path";
+import { existsSync, readdirSync, readFileSync, statSync } from "node:fs";
+import { join, dirname, relative, sep } from "node:path";
 import { fileURLToPath } from "node:url";
 
-import { SHIP, STRIP, NESTED_STRIP } from "./publish-inventory-manifest.mjs";
+import {
+  SHIP,
+  STRIP,
+  NESTED_STRIP,
+  LARGE_FILE_THRESHOLD_BYTES,
+  LARGE_FILE_ALLOWLIST,
+} from "./publish-inventory-manifest.mjs";
 
 const REPO_ROOT = join(dirname(fileURLToPath(import.meta.url)), "..");
 
 const ship = new Set(SHIP);
 const strip = new Set(STRIP);
 const classified = new Set([...ship, ...strip]);
+const largeAllow = new Set(LARGE_FILE_ALLOWLIST);
+
+// Human-readable byte size for the failure message (e.g. "1.2 MiB").
+function fmtBytes(n) {
+  if (n < 1024) return `${n} B`;
+  const units = ["KiB", "MiB", "GiB", "TiB"];
+  let v = n / 1024;
+  let i = 0;
+  while (v >= 1024 && i < units.length - 1) {
+    v /= 1024;
+    i += 1;
+  }
+  return `${v.toFixed(1)} ${units[i]}`;
+}
+
+// Every regular file under `root`, returned as a path RELATIVE to `root` using
+// forward slashes (so it matches the manifest allowlist regardless of platform).
+function walkFilesRelative(root) {
+  const out = [];
+  const stack = [root];
+  while (stack.length > 0) {
+    const cur = stack.pop();
+    let entries;
+    try {
+      entries = readdirSync(cur, { withFileTypes: true });
+    } catch {
+      continue; // unreadable dir — nothing to weigh here
+    }
+    for (const e of entries) {
+      const full = join(cur, e.name);
+      if (e.isDirectory()) {
+        stack.push(full);
+      } else if (e.isFile()) {
+        out.push(relative(root, full).split(sep).join("/"));
+      }
+    }
+  }
+  return out;
+}
 
 // A .gitattributes line configures Git LFS if it carries the lfs filter driver.
 // The public snapshot must ship an LFS-free .gitattributes (the baseline shipped
@@ -162,12 +207,28 @@ function runSourceMode() {
     }
   }
 
+  // (d) Every LARGE_FILE_ALLOWLIST entry must still be a tracked file, else the
+  //     allowlist has rotted: a listed asset was renamed/removed and its entry
+  //     now excuses nothing. Mirrors (b)/(c) for the large-file backstop tier.
+  const trackedFiles = new Set(paths);
+  for (const entry of [...LARGE_FILE_ALLOWLIST].sort()) {
+    if (!trackedFiles.has(entry)) {
+      problems.push(
+        `STALE-LARGE-FILE-ALLOWLIST: allowlisted large file "${entry}" is no ` +
+          `longer a tracked file. Remove it from LARGE_FILE_ALLOWLIST in ` +
+          `scripts/publish-inventory-manifest.mjs so the allowlist cannot rot ` +
+          `silently.`,
+      );
+    }
+  }
+
   if (problems.length > 0) fail(problems);
 
   console.log(
     `[check-publish-inventory] OK (source) — all ${tracked.size} tracked ` +
       `top-level entr(ies) classified: ${ship.size} SHIP, ${strip.size} STRIP; ` +
-      `${NESTED_STRIP.length} nested-strip entr(ies) still present in the tree. ` +
+      `${NESTED_STRIP.length} nested-strip entr(ies) still present in the tree; ` +
+      `${LARGE_FILE_ALLOWLIST.length} large-file allowlist entr(ies) still tracked. ` +
       `(Top-level scope; internal files inside SHIP dirs are covered by the §3 ` +
       `strip list and §4 content scans.)`,
   );
@@ -240,14 +301,38 @@ function runSnapshotMode(dir) {
     }
   }
 
+  // (i) BACKSTOP: no file anywhere in the snapshot may exceed the size ceiling
+  //     unless it is on the reviewed large-file allowlist. NESTED_STRIP only
+  //     catches the internal bloat someone already named; this catches the big
+  //     file nobody thought to name — the same fail-open, one level down.
+  for (const rel of walkFilesRelative(dir).sort()) {
+    let size;
+    try {
+      size = statSync(join(dir, rel)).size;
+    } catch {
+      continue;
+    }
+    if (size > LARGE_FILE_THRESHOLD_BYTES && !largeAllow.has(rel)) {
+      problems.push(
+        `LARGE-FILE-NOT-ALLOWLISTED: "${rel}" is ${fmtBytes(size)}, over the ` +
+          `${fmtBytes(LARGE_FILE_THRESHOLD_BYTES)} publish size ceiling and not ` +
+          `on LARGE_FILE_ALLOWLIST in scripts/publish-inventory-manifest.mjs. ` +
+          `If it legitimately ships, add it there (a reviewed decision); if it ` +
+          `is internal, strip it (NESTED_STRIP + the §3 rm list).`,
+      );
+    }
+  }
+
   if (problems.length > 0) fail(problems);
 
   console.log(
     `[check-publish-inventory] OK (snapshot) — "${dir}" matches the manifest: ` +
       `all ${ship.size} SHIP entr(ies) present, all ${strip.size} STRIP entr(ies) ` +
       `absent, no unclassified top-level entries; all ${NESTED_STRIP.length} ` +
-      `nested-strip entr(ies) absent and .gitattributes carries no LFS rule. ` +
-      `(Top-level scope; run the §4 content scans for inside-dir material.)`,
+      `nested-strip entr(ies) absent, .gitattributes carries no LFS rule, and no ` +
+      `file over the ${fmtBytes(LARGE_FILE_THRESHOLD_BYTES)} ceiling is unlisted ` +
+      `(${LARGE_FILE_ALLOWLIST.length} allowlisted). (Top-level scope; run the §4 ` +
+      `content scans for inside-dir material.)`,
   );
 }
 

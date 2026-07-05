@@ -23,7 +23,12 @@ import { tmpdir } from "node:os";
 import { dirname, join } from "node:path";
 import { fileURLToPath } from "node:url";
 
-import { SHIP, NESTED_STRIP } from "./publish-inventory-manifest.mjs";
+import {
+  SHIP,
+  NESTED_STRIP,
+  LARGE_FILE_THRESHOLD_BYTES,
+  LARGE_FILE_ALLOWLIST,
+} from "./publish-inventory-manifest.mjs";
 
 const __dirname = dirname(fileURLToPath(import.meta.url));
 const CHECKER = join(__dirname, "check-publish-inventory.mjs");
@@ -42,7 +47,13 @@ function assert(cond, msg) {
 // would look like: every SHIP top-level entry present (as a dir, or a file for
 // .gitattributes), no STRIP entry, nothing unclassified, no nested-strip item,
 // and an LFS-free .gitattributes. Options let a test reintroduce a hazard.
-function buildSnapshot({ includeNested = false, lfsInGitattributes = false } = {}) {
+function buildSnapshot({
+  includeNested = false,
+  lfsInGitattributes = false,
+  // Extra files to plant, each { path (rel to snapshot root), bytes }. Used to
+  // exercise the large-file backstop with over- and under-threshold files.
+  extraFiles = [],
+} = {}) {
   const dir = mkdtempSync(join(tmpdir(), "pub-inv-"));
   for (const entry of SHIP) {
     if (entry === ".gitattributes") continue; // written explicitly below
@@ -65,6 +76,11 @@ function buildSnapshot({ includeNested = false, lfsInGitattributes = false } = {
         writeFileSync(join(full, "shot.png"), "png");
       }
     }
+  }
+  for (const { path, bytes } of extraFiles) {
+    const full = join(dir, path);
+    mkdirSync(dirname(full), { recursive: true });
+    writeFileSync(full, Buffer.alloc(bytes, 0));
   }
   return dir;
 }
@@ -98,7 +114,10 @@ function withSnapshot(opts, fn) {
 // --- 1. A nested-strip item left in the snapshot FAILS. -------------------
 withSnapshot({ includeNested: true }, (dir) => {
   const { ok, output } = runSnapshot(dir);
-  assert(!ok, "snapshot with a nested-strip item present fails (non-zero exit)");
+  assert(
+    !ok,
+    "snapshot with a nested-strip item present fails (non-zero exit)",
+  );
   assert(
     output.includes("NESTED-NOT-STRIPPED"),
     "nested-strip failure names NESTED-NOT-STRIPPED",
@@ -124,6 +143,72 @@ withSnapshot({}, (dir) => {
     "the passing snapshot prints the OK (snapshot) line",
   );
 });
+
+// --- 4. An over-threshold, un-allowlisted file FAILS. --------------------
+withSnapshot(
+  {
+    extraFiles: [
+      {
+        path: "artifacts/void-client/public/sneaky-huge-asset.bin",
+        bytes: LARGE_FILE_THRESHOLD_BYTES + 1,
+      },
+    ],
+  },
+  (dir) => {
+    const { ok, output } = runSnapshot(dir);
+    assert(
+      !ok,
+      "snapshot with an over-threshold un-allowlisted file fails (non-zero exit)",
+    );
+    assert(
+      output.includes("LARGE-FILE-NOT-ALLOWLISTED"),
+      "large-file failure names LARGE-FILE-NOT-ALLOWLISTED",
+    );
+    assert(
+      output.includes("sneaky-huge-asset.bin"),
+      "large-file failure names the offending file",
+    );
+  },
+);
+
+// --- 5. An allowlisted large file PASSES. --------------------------------
+withSnapshot(
+  {
+    extraFiles: [
+      {
+        path: LARGE_FILE_ALLOWLIST[0],
+        bytes: LARGE_FILE_THRESHOLD_BYTES + 1024,
+      },
+    ],
+  },
+  (dir) => {
+    const { ok, output } = runSnapshot(dir);
+    assert(
+      ok,
+      "a snapshot whose only over-threshold file is allowlisted passes",
+    );
+    assert(
+      output.includes("OK (snapshot)"),
+      "the allowlisted-large-file snapshot prints the OK (snapshot) line",
+    );
+  },
+);
+
+// --- 6. A file exactly AT the threshold PASSES (ceiling is exclusive). ----
+withSnapshot(
+  {
+    extraFiles: [
+      {
+        path: "artifacts/void-client/public/right-at-the-line.bin",
+        bytes: LARGE_FILE_THRESHOLD_BYTES,
+      },
+    ],
+  },
+  (dir) => {
+    const { ok } = runSnapshot(dir);
+    assert(ok, "a file exactly at the threshold passes (ceiling is > not >=)");
+  },
+);
 
 if (failures > 0) {
   process.stderr.write(`\n${failures} assertion(s) failed.\n`);

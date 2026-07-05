@@ -91,3 +91,41 @@ export const NESTED_STRIP = [
   "artifacts/void-client/docs/aesthetic-audit-shots", // ~354 MB internal design-review PNGs
   "artifacts/void-client/docs/aesthetic-audit.md", // internal aesthetic-audit doc the shots belong to
 ];
+
+// Tier 3: generic large-file BACKSTOP. NESTED_STRIP names the *known* internal
+// bloat by hand; this closes the same fail-open class one level down for the
+// UNKNOWN case — a future oversized file dropped into any SHIP dir that nobody
+// thinks to name would otherwise ship by default (`git archive HEAD` carries
+// the whole tracked tree). Snapshot mode walks the candidate tree and FAILS on
+// any file larger than LARGE_FILE_THRESHOLD_BYTES that is not on the reviewed
+// LARGE_FILE_ALLOWLIST below, naming the offending file and its size.
+//
+// WHY A THRESHOLD + ALLOWLIST (not just NESTED_STRIP): NESTED_STRIP only stops
+// files someone already noticed and named. The whole point of this gate is the
+// file nobody named. A size ceiling turns "did anyone remember to strip this?"
+// into "any big new file must be justified on the allowlist, or it stops the
+// publish" — fail-closed instead of fail-open.
+export const LARGE_FILE_THRESHOLD_BYTES = 512 * 1024; // 512 KiB
+
+// Reviewed allowlist of the legitimately-large assets that DO ship and exceed
+// the threshold. Derived from an audit of the real tracked tree (largest first;
+// see docs/pre-publish-scrub-2026-06.md §4.2). Paths are relative to the
+// snapshot / tree root. Adding an entry here is a deliberate, reviewed act —
+// that friction is the feature: a new oversized file must be explained, not
+// shipped silently. Assets under the threshold (e.g. the screenshots/ editorial
+// hero JPEGs, the PWA splash/icon PNGs) need no entry; they pass on size alone.
+export const LARGE_FILE_ALLOWLIST = [
+  "artifacts/mockup-sandbox/public/concrete.jpeg", // design-sandbox backdrop
+  "artifacts/biometric-demo-video/public/images/webcam-talking.webm", // demo-video source clip
+  "artifacts/void-client/public/biometric-demo.mp4", // landing biometric demo
+  "artifacts/void-client/public/silver-facets.png", // landing hero texture
+  "artifacts/void-client/public/biometric-demo-poster-ref.png", // demo poster reference frame
+  "artifacts/biometric-demo-video/public/images/webcam-portrait.png", // demo-video source still
+  "artifacts/void-client/public/biometric-demo-poster.png", // demo poster
+  "artifacts/biometric-demo-video/public/audio/music.mp3", // demo-video score
+  "artifacts/void-client/public/coordination-demo.mp4", // landing coordination demo
+  "void-icon.png", // top-level project icon
+  "artifacts/void-client/public/coordination-demo-poster.png", // coordination demo poster
+  "artifacts/void-client/public/portraits/self-portrait-gold-ascii.png", // landing portrait asset
+  "artifacts/mockup-sandbox/public/portraits/self-portrait02_1779993532975.png", // design-sandbox portrait
+];
