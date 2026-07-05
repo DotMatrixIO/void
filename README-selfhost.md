@@ -208,11 +208,12 @@ docker compose up -d --build
 
 Compose forwards your `.env` `NODE_ENV` into the image **build**, where it drives the onion-bake guard. With the `NODE_ENV=development` from step 4 this first run builds a clearnet-only bundle — **no `.onion` address and no manual edits to `Dockerfile`/`docker-compose.yml` are required.** The running container is always production-hardened (the compose `environment:` block pins the runtime `NODE_ENV=production`, so `dev-pay` stays off — see the security warning in step 4). For a public deployment, see the production note below.
 
-> **Production build note (read before you deploy publicly):** a production bundle (`NODE_ENV=production`) bakes in a Tor `.onion` mirror address and **fails the build closed** if one is missing — so a "Tor-reachable" bundle can never ship with a silently-inert onion link. Before running `docker compose up -d --build` for production, set both in `.env`:
+> **Production build note (read before you deploy publicly):** a production bundle (`NODE_ENV=production`) bakes in a Tor `.onion` mirror address **and** an absolute public origin, and **fails the build closed** if either is missing — so a "Tor-reachable" bundle can never ship with a silently-inert onion link, and social-card previews (`og:image` / `og:url`) can never ship with broken relative URLs. Before running `docker compose up -d --build` for production, set all three in `.env`:
 >
 > ```bash
 > NODE_ENV=production
 > VITE_VOID_ONION_HOST=<your-56-char-base32>.onion
+> PUBLIC_ORIGIN=https://your-domain.example
 > ```
 >
 > If you genuinely have no onion mirror yet and only want a clearnet smoke test, keep `NODE_ENV=development` for the build (as in step 4); the guard relaxes only when `NODE_ENV` is not `production`. See §5 "Build-Time Variables" for details.
@@ -858,6 +859,7 @@ These are baked into the Docker image at build time. They are not runtime env va
 |---|---|---|---|---|
 | `BASE_PATH` | No | `/` | Frontend asset prefix for subpath deployments. Currently set as `ENV BASE_PATH=/` in the Dockerfile — to change it, edit the Dockerfile or add an `ARG` override in your build pipeline | Defaults to `/` |
 | `VITE_VOID_ONION_HOST` | Required for production builds | `<56-char-base32>.onion` | The Tor v3 `.onion` mirror host baked into the bundle's onion affordance. `docker-compose.yml` forwards it from `.env` as a build arg. Under a production build the onion-bake guard **fails closed** if this is unset or not a valid v3 host, so a "Tor-reachable" bundle can never ship an inert onion link | A production build (`NODE_ENV=production`) **fails**; a non-production build (`NODE_ENV=development`) builds clearnet-only with no onion affordance |
+| `PUBLIC_ORIGIN` | Required for production builds | `https://your-domain.example` | The absolute origin baked into the social-card metadata (`og:image` / `og:url`) by `gen-og-pages.mjs`. `docker-compose.yml` forwards it from `.env` as a build arg. Under a production build the OG generator **fails closed** if neither this nor `REPLIT_DOMAINS` is set, because relative OG URLs are rejected by Facebook/X/Slack/iMessage and would silently break every social preview. Like the onion host, it is baked into the bundle bytes | A production build (`NODE_ENV=production`) **fails**; a non-production build (`NODE_ENV=development`) still requires it only if `OG_STRICT=1` |
 | `NODE_ENV` (build) | No | `production` (default) or `development` | At build time, selects the canonical production bundle (onion-bake guard ON — requires `VITE_VOID_ONION_HOST`) vs. a clearnet-only smoke-test bundle (`development`, guard relaxed). `docker-compose.yml` forwards your `.env` `NODE_ENV` into the build. The container's runtime `NODE_ENV` is separately pinned to `production` in the compose `environment:` block and is **not** read from `.env`, so a `development` value here only affects the build, never the running container's posture | Defaults to `production` |
 
 ### Room Types
@@ -1405,12 +1407,15 @@ What matters is that whatever you verify against was built with the *same* addre
 **Posture A — verify against the canonical signed release (recommended for the canonical instance).**
 The canonical release CI builds with `VITE_VOID_ONION_HOST` already set to the canonical address, so the cosign-signed, SLSA-attested `SHA256SUMS` *describes the onion-baked bundle*. Deploy that release artifact unmodified and the whole chain lines up for any visitor: `/proof/runtime` (what their browser loaded) matches `/api/proof/build` (what the server says it serves) matches the signed `SHA256SUMS` for the release tag. This is provenance — "these bytes came from the named workflow at the named tag" — and it only holds if the address went in at build time in CI. For this to work, the *same* address must be injected into all three build steps in `release.yml` (the `build-and-sign` job and both `reproducibility-check` jobs). The release-blocking diff is the clean-container `reproducibility-check` job: a mismatch between it and `build-and-sign` fails the byte-for-byte assertion and the release refuses to publish. The arm64 `reproducibility-check-arm64` job is advisory (`continue-on-error: true`) and does not block on its own, but give it the same value too so its diff stays meaningful. The address is public (it ships in this README and the page footer), so it belongs in CI as a *variable*, not a secret.
 
+`PUBLIC_ORIGIN` is the second build input under the exact same rule. The OG page generator bakes the absolute origin into every social-card's `og:image` / `og:url`, so it changes the bundle bytes just like the onion address does — and a production build fails closed without it. CI sources it from the public `PUBLIC_ORIGIN` repo *variable* (again public, not a secret) and injects the identical value into all three `release.yml` build steps and the Docker image's frontend stage. Change one build step's `PUBLIC_ORIGIN` (or `VITE_VOID_ONION_HOST`) without the others and the reproducibility diff fails for the wrong reason.
+
 **Posture B — verify against your own rebuild (self-hoster building locally).**
-If you build the bundle yourself with your own `.onion` address, you become your own reference. `/api/proof/build` reports *your* bundle's sums, and a visitor verifies your instance against itself plus a rebuild from the same commit *with the same `VITE_VOID_ONION_HOST`* — not against the canonical release sums. To reproduce locally, add your address to the build step of the recipe above:
+If you build the bundle yourself with your own `.onion` address, you become your own reference. `/api/proof/build` reports *your* bundle's sums, and a visitor verifies your instance against itself plus a rebuild from the same commit *with the same `VITE_VOID_ONION_HOST` and `PUBLIC_ORIGIN`* — not against the canonical release sums. To reproduce locally, add your address to the build step of the recipe above:
 
 ```bash
 NODE_ENV=production PORT=3000 BASE_PATH=/ \
   VITE_VOID_ONION_HOST=youraddress.onion \
+  PUBLIC_ORIGIN=https://your-domain.example \
   pnpm --filter @workspace/void-client run build
 ```
 

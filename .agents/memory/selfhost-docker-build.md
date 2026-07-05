@@ -64,8 +64,12 @@ forwards the args it lists — `.env` alone never reaches a build stage):
   trip this. To validate a prod build locally: set NODE_ENV=production PORT=3000 BASE_PATH=/
   VITE_VOID_ONION_HOST=<56 a's>.onion PUBLIC_ORIGIN=https://x.example.
 
-## Known residual gap (out of scope, propose as follow-up)
-release.yml has ZERO onion handling; its production Docker build + reproducibility check
-(and the README "Rebuild from the recipe" snippet at NODE_ENV=production) will fail the
-onion guard once a production onion host is expected. Wiring VITE_VOID_ONION_HOST into
-release.yml + the rebuild recipe is a separate task.
+## Byte-affecting production build inputs must match across ALL release contexts
+`VITE_VOID_ONION_HOST` (onion affordance) and `PUBLIC_ORIGIN` (OG page HTML) are both
+baked into void-client bundle bytes, and a production build fails closed without them.
+Rule: source each from a public GitHub repo VARIABLE (`vars.*`, not a secret — both
+ship publicly) and inject the IDENTICAL value into every release build context — each
+release.yml build step (build-and-sign, both reproducibility-check rebuilds), the Docker
+build-args, and void-client-sri.yml — or the byte-for-byte reproducibility diff fails
+for configuration skew rather than true nondeterminism. Any new production build path
+must carry BOTH. Operator must have the `PUBLIC_ORIGIN` repo variable set.

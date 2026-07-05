@@ -26,6 +26,15 @@
 #   pnpm build, the Docker image build's frontend stage, and both
 #   reproducibility rebuilds) so byte-identity still holds.
 #
+#   PUBLIC_ORIGIN (same treatment): the OG page generator
+#   (artifacts/void-client/scripts/gen-og-pages.mjs) fails closed under
+#   NODE_ENV=production if neither PUBLIC_ORIGIN nor REPLIT_DOMAINS is set,
+#   and the absolute origin it bakes into the social-card HTML changes the
+#   bundle bytes. So we source it from the public `PUBLIC_ORIGIN` repo
+#   VARIABLE and inject the IDENTICAL value into every production build step
+#   below, exactly like VITE_VOID_ONION_HOST, or the reproducibility diff
+#   fails for the wrong reason.
+#
 #   Consequence, stated honestly: baking the canonical `.onion` makes the
 #   published, signed SHA256SUMS.void-client SPECIFIC TO THE CANONICAL
 #   INSTANCE's build. A self-hoster who rebuilds with their own onion (or
@@ -161,6 +170,13 @@ jobs:
           # §6d). Must be IDENTICAL to the value used by the reproducibility
           # rebuild below or the byte-for-byte diff fails.
           VITE_VOID_ONION_HOST: ${{ vars.VITE_VOID_ONION_HOST }}
+          # Absolute origin baked into the social-card OG pages. Also a public
+          # repo VARIABLE. Under NODE_ENV=production gen-og-pages fails closed
+          # if neither PUBLIC_ORIGIN nor REPLIT_DOMAINS is set. Like the onion
+          # host, this value is baked into the bundle bytes, so it MUST be
+          # IDENTICAL across every build step here or the reproducibility diff
+          # fails.
+          PUBLIC_ORIGIN: ${{ vars.PUBLIC_ORIGIN }}
         run: pnpm --filter @workspace/void-client run build
 
       - name: Build api-server with build-time provenance injection
@@ -259,6 +275,7 @@ jobs:
             RELEASE_TAG=${{ steps.tag.outputs.release_tag }}
             BUILD_TIMESTAMP=${{ github.event.head_commit.timestamp }}
             VITE_VOID_ONION_HOST=${{ vars.VITE_VOID_ONION_HOST }}
+            PUBLIC_ORIGIN=${{ vars.PUBLIC_ORIGIN }}
           outputs: type=docker,name=void-app:${{ steps.tag.outputs.release_tag }}
 
       - name: Capture api-server image digest and verify embedded BUILD_INFO
@@ -465,6 +482,10 @@ jobs:
           # byte-for-byte diff below fails. This job is what enforces "the
           # canonical build is deterministic against itself".
           VITE_VOID_ONION_HOST: ${{ vars.VITE_VOID_ONION_HOST }}
+          # Same public-origin variable as build-and-sign. Also a bundle-byte
+          # input (OG pages), so the clean rebuild MUST use the identical value
+          # or the byte-for-byte diff below fails.
+          PUBLIC_ORIGIN: ${{ vars.PUBLIC_ORIGIN }}
         run: pnpm --filter @workspace/void-client run build
 
       - name: Recompute SHA256SUMS.void-client (clean rebuild)
@@ -540,6 +561,10 @@ jobs:
           # a mismatch would always fire for the wrong reason (missing onion,
           # not an arch difference).
           VITE_VOID_ONION_HOST: ${{ vars.VITE_VOID_ONION_HOST }}
+          # Same public-origin variable as the other build steps, for the same
+          # reason: an OG-baked bundle input that must match to keep this
+          # advisory diff meaningful.
+          PUBLIC_ORIGIN: ${{ vars.PUBLIC_ORIGIN }}
         run: pnpm --filter @workspace/void-client run build
 
       - name: Recompute and diff

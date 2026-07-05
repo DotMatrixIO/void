@@ -66,6 +66,14 @@ jobs:
           NODE_ENV: production
           PORT: "3000"
           BASE_PATH: /
+          # A NODE_ENV=production build fails closed twice: the onion-bake guard
+          # (vite.config.ts) needs a valid v3 VITE_VOID_ONION_HOST, and
+          # gen-og-pages needs an absolute PUBLIC_ORIGIN. Both are sourced from
+          # the public repo VARIABLES, same as release.yml. Their exact values
+          # don't affect SRI (this job only checks integrity attributes), but
+          # they must be present or the build never reaches the SRI step.
+          VITE_VOID_ONION_HOST: ${{ vars.VITE_VOID_ONION_HOST }}
+          PUBLIC_ORIGIN: ${{ vars.PUBLIC_ORIGIN }}
         run: pnpm --filter @workspace/void-client run build
 
       - name: Verify build outputs exist
