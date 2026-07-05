@@ -1,9 +1,0 @@
-# SPDX-License-Identifier: AGPL-3.0-or-later
-blank_issues_enabled: false
-contact_links:
-  - name: Security / privacy vulnerability
-    url: https://github.com/security/advisories
-    about: Do NOT open a public issue. Read SECURITY.md and report privately.
-  - name: Feature policy (read before requesting features)
-    url: https://github.com/
-    about: VOID stays small on purpose. VOID-Feature-Policy.md explains what is out of scope.
