@@ -122,6 +122,10 @@ args = "check:pnpm-action-version"
 task = "workflow.run"
 args = "release-onion-bake"
 
+[[workflows.workflow.tasks]]
+task = "workflow.run"
+args = "preflight-build-vars"
+
 [[workflows.workflow]]
 name = "api-server-tests"
 author = "agent"
@@ -393,6 +397,17 @@ author = "agent"
 [[workflows.workflow.tasks]]
 task = "shell.exec"
 args = "pnpm --filter @workspace/void-client run check:release-onion-bake"
+
+[workflows.workflow.metadata]
+isValidation = true
+
+[[workflows.workflow]]
+name = "preflight-build-vars"
+author = "agent"
+
+[[workflows.workflow.tasks]]
+task = "shell.exec"
+args = "pnpm --filter @workspace/scripts run test:preflight-build-vars"
 
 [workflows.workflow.metadata]
 isValidation = true
