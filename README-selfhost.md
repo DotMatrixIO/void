@@ -922,6 +922,11 @@ deduped per signal so a storm of any one cannot flood the topic.
 NODE_ENV=production
 PORT=3000
 SERVE_STATIC=1
+# Required under NODE_ENV=production. The onion-bake guard fails closed without
+# a valid 56-char base32 .onion mirror host, and gen-og-pages fails closed
+# without an absolute PUBLIC_ORIGIN for social-card og:image / og:url metadata.
+VITE_VOID_ONION_HOST=REPLACE_WITH_YOUR_56CHAR_BASE32.onion
+PUBLIC_ORIGIN=https://void.your-domain.example
 
 LIGHTNING_BACKEND=btcpay
 PAYWALL_SECRET=REPLACE_WITH_LONG_RANDOM_SECRET

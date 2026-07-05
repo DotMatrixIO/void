@@ -11,6 +11,9 @@ services:
         # clearnet-only, no onion address required. See README-selfhost §3/§5.
         NODE_ENV: ${NODE_ENV:-production}
         VITE_VOID_ONION_HOST: ${VITE_VOID_ONION_HOST:-}
+        # Absolute origin baked into social-card metadata. Required for a
+        # production build (NODE_ENV=production) or gen-og-pages fails closed.
+        PUBLIC_ORIGIN: ${PUBLIC_ORIGIN:-}
     restart: unless-stopped
     # Give the api-server up to 10s after SIGTERM to broadcast
     # `server-shutdown` to every connected socket and drain its in-flight

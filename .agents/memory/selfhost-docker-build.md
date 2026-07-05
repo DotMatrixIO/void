@@ -48,6 +48,22 @@ without `VITE_VOID_ONION_HOST`. Build knob vs. runtime posture are deliberately 
 v3 (56 base32) host. There is intentionally NO "disable" escape — the only relax lever is
 `NODE_ENV != production`. compose forwards `VITE_VOID_ONION_HOST` from `.env` as a build arg.
 
+## Production build has a CHAIN of fail-closed guards, not just the onion one
+Under `NODE_ENV=production` the void-client build fails closed in sequence, each needing a
+distinct env var wired through Dockerfile ARG/ENV + compose build.args (compose only
+forwards the args it lists — `.env` alone never reaches a build stage):
+- `VITE_VOID_ONION_HOST` — onion-bake guard (vite.config).
+- `PUBLIC_ORIGIN` — `gen-og-pages.mjs` refuses relative og:image/og:url when
+  `NODE_ENV=production || OG_STRICT=1` and neither PUBLIC_ORIGIN nor REPLIT_DOMAINS is set.
+  There is NO relax lever that keeps the onion bake (OG_STRICT=0 doesn't help — production
+  alone arms it). Was UNWIRED originally (Dockerfile/compose/README never mentioned it), so
+  the documented canonical production build was impossible; now wired.
+- `PORT` — vite.config reads it at CONFIG-LOAD time (before the build), so even a local
+  `pnpm --filter void-client build` throws "PORT environment variable is required" without
+  it. Dockerfile sets `ENV PORT=3000`, so the container build is fine; only bare local runs
+  trip this. To validate a prod build locally: set NODE_ENV=production PORT=3000 BASE_PATH=/
+  VITE_VOID_ONION_HOST=<56 a's>.onion PUBLIC_ORIGIN=https://x.example.
+
 ## Known residual gap (out of scope, propose as follow-up)
 release.yml has ZERO onion handling; its production Docker build + reproducibility check
 (and the README "Rebuild from the recipe" snippet at NODE_ENV=production) will fail the

@@ -79,6 +79,15 @@ ENV NODE_ENV=$NODE_ENV
 # manual build supply: docker build --build-arg VITE_VOID_ONION_HOST=<56-char-base32>.onion
 ARG VITE_VOID_ONION_HOST=""
 ENV VITE_VOID_ONION_HOST=$VITE_VOID_ONION_HOST
+# Absolute origin baked into social-card metadata (og:image / og:url). The OG
+# page generator (artifacts/void-client/scripts/gen-og-pages.mjs) fails closed
+# under NODE_ENV=production if neither PUBLIC_ORIGIN nor REPLIT_DOMAINS is set,
+# because relative OG URLs are rejected by Facebook/X/Slack/iMessage and would
+# silently break every social preview. docker-compose forwards this from
+# PUBLIC_ORIGIN in your .env; for a manual build supply:
+# docker build --build-arg PUBLIC_ORIGIN=https://your-domain.example
+ARG PUBLIC_ORIGIN=""
+ENV PUBLIC_ORIGIN=$PUBLIC_ORIGIN
 RUN pnpm --filter @workspace/void-client run build
 
 FROM deps AS backend
