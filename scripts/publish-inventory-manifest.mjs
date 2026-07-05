@@ -70,7 +70,6 @@ export const STRIP = [
   ".replit", // Replit platform/orchestration config (historically carried a secret)
   ".replitignore", // Replit deploy-image ignore — managed-platform cruft
   "replit.md", // internal dev/agent context incl. a "User preferences" section
-  "replit.nix", // Replit Nix env — plants a "built on Replit" flag
 ];
 
 // Tier 2: NESTED strips — internal material that lives INSIDE a SHIP dir and so
