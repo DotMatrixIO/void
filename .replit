@@ -118,6 +118,14 @@ args = "publish-inventory"
 task = "workflow.run"
 args = "check:pnpm-action-version"
 
+[[workflows.workflow.tasks]]
+task = "workflow.run"
+args = "test-publish-inventory"
+
+[[workflows.workflow.tasks]]
+task = "workflow.run"
+args = "test-mockup-codegen-safe"
+
 [[workflows.workflow]]
 name = "api-server-tests"
 author = "agent"
@@ -378,6 +386,28 @@ author = "agent"
 [[workflows.workflow.tasks]]
 task = "shell.exec"
 args = "pnpm --filter @workspace/scripts run check:pnpm-action-version"
+
+[workflows.workflow.metadata]
+isValidation = true
+
+[[workflows.workflow]]
+name = "test-publish-inventory"
+author = "agent"
+
+[[workflows.workflow.tasks]]
+task = "shell.exec"
+args = "pnpm --filter @workspace/scripts run test:publish-inventory"
+
+[workflows.workflow.metadata]
+isValidation = true
+
+[[workflows.workflow]]
+name = "test-mockup-codegen-safe"
+author = "agent"
+
+[[workflows.workflow.tasks]]
+task = "shell.exec"
+args = "pnpm --filter @workspace/scripts run test:mockup-codegen-safe"
 
 [workflows.workflow.metadata]
 isValidation = true
