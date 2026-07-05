@@ -106,6 +106,38 @@ jobs:
       git_sha: ${{ steps.tag.outputs.git_sha }}
 
     steps:
+      - name: Preflight — required release build variables are set
+        # VITE_VOID_ONION_HOST and PUBLIC_ORIGIN are both baked into the
+        # production void-client bundle, and a NODE_ENV=production build fails
+        # CLOSED without them (onion-bake guard in vite.config.ts + gen-og-pages
+        # strict mode). That failure otherwise surfaces deep in the build with a
+        # cryptic exit, so assert both up front with an actionable message that
+        # names the exact repository variable and where to set it. Keep this
+        # block byte-identical with the same preflight in
+        # .github/workflows/void-client-sri.yml.
+        env:
+          VITE_VOID_ONION_HOST: ${{ vars.VITE_VOID_ONION_HOST }}
+          PUBLIC_ORIGIN: ${{ vars.PUBLIC_ORIGIN }}
+        run: |
+          set -euo pipefail
+          missing=0
+          if [ -z "${VITE_VOID_ONION_HOST:-}" ]; then
+            echo "::error::Repository variable VITE_VOID_ONION_HOST is not set. It is baked into the production bundle's Tor onion link and a NODE_ENV=production build fails closed without it. Set it to the deployment's <56-char-base32>.onion host."
+            missing=1
+          fi
+          if [ -z "${PUBLIC_ORIGIN:-}" ]; then
+            echo "::error::Repository variable PUBLIC_ORIGIN is not set. gen-og-pages bakes it into every social card's absolute og:url/og:image and a NODE_ENV=production build fails closed without it. Set it to the canonical origin, e.g. https://void.example.com."
+            missing=1
+          elif ! printf '%s' "$PUBLIC_ORIGIN" | grep -qiE '^https?://[^/]+/?$'; then
+            echo "::error::Repository variable PUBLIC_ORIGIN='${PUBLIC_ORIGIN}' must be an absolute http(s) origin with no path, e.g. https://void.example.com. gen-og-pages rejects anything else."
+            missing=1
+          fi
+          if [ "$missing" -ne 0 ]; then
+            echo "::error::Set the variable(s) above under: repository Settings -> Secrets and variables -> Actions -> Variables. These are public repository VARIABLES, not secrets."
+            exit 1
+          fi
+          echo "Preflight OK: VITE_VOID_ONION_HOST and PUBLIC_ORIGIN are set."
+
       - name: Checkout repository
         uses: actions/checkout@v4
         with:
