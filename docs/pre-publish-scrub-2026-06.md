@@ -241,6 +241,24 @@ gitignored).
 filenames are nonetheless in the §4 grep as a backstop in case any are added
 between now and the snapshot.)
 
+> **Nested strips (material INSIDE a SHIP dir).** The table above is top-level
+> only. Two internal items live under the SHIP `artifacts/` dir and must NOT
+> reach the public snapshot — they cannot be expressed by the top-level scheme,
+> so they get their own machine-enforced list (`NESTED_STRIP` in
+> `scripts/publish-inventory-manifest.mjs`), the §3 nested `rm` lines, and the
+> §4.2 snapshot absence check, all in lockstep:
+>
+> - `artifacts/void-client/docs/aesthetic-audit-shots/` — ~354 MB of internal
+>   design-review PNGs. Shipping them balloons the public repo from ~29 MB to
+>   ~381 MB (`git archive HEAD` carries the whole tracked tree).
+> - `artifacts/void-client/docs/aesthetic-audit.md` — the internal
+>   aesthetic-audit doc those shots belong to.
+>
+> Relatedly, the tree's only `.gitattributes` rule is a Git LFS pointer for a
+> file inside that stripped dir. The public snapshot must ship an **LFS-free**
+> `.gitattributes` (the baseline shipped it emptied); §3 empties it and §4.2
+> fails on any surviving `filter=lfs` rule.
+
 ---
 
 ## 3. Clean-publish procedure (operator-runnable)
@@ -299,6 +317,23 @@ rm -f  "$PUB/docs/security-audit-internal-2026-04.md"
 rm -f  "$PUB/docs/manifest-review-2026-05.md"
 rm -f  "$PUB/docs/manifest-review-2026-06.md"
 #    docs/marketing-claims-audit.md is NOT pulled — it was promoted to SHIP (§2).
+#
+#    NESTED strips — internal material that lives INSIDE a SHIP dir (artifacts/
+#    ships, but this design-review material must not). These cannot be expressed
+#    by the top-level §2 SHIP/STRIP scheme, so they are enforced by the
+#    NESTED_STRIP list in scripts/publish-inventory-manifest.mjs and asserted
+#    absent by the snapshot check in §4.2. Keep these rm lines in lockstep with
+#    that list:
+rm -rf "$PUB/artifacts/void-client/docs/aesthetic-audit-shots"  # ~354 MB internal design-review PNGs — shipping them balloons the public repo from ~29 MB to ~381 MB
+rm -f  "$PUB/artifacts/void-client/docs/aesthetic-audit.md"     # internal aesthetic-audit doc the shots belong to
+#
+#    LFS-free .gitattributes. The tree's only .gitattributes rule is a Git LFS
+#    pointer for a file inside the stripped aesthetic-audit-shots dir. The public
+#    snapshot must carry NO LFS configuration (the baseline shipped an emptied
+#    .gitattributes; an LFS pointer references blobs the fresh-history snapshot
+#    does not contain). Empty it — the §4.2 snapshot check fails on any surviving
+#    `filter=lfs` rule:
+: > "$PUB/.gitattributes"
 
 # 3. RUN §4 VERIFICATION NOW, against "$PUB", before creating any commit.
 #    Do not proceed past a failure. (See §4.)
@@ -426,16 +461,26 @@ verification can no longer drift from the manifest the way a hand-maintained
 
 ```sh
 node scripts/check-publish-inventory.mjs --snapshot "$PUB"
-# OK (snapshot)  -> all SHIP present, all STRIP absent, nothing unclassified.
+# OK (snapshot)  -> all SHIP present, all STRIP absent, nothing unclassified,
+#                   all NESTED_STRIP absent, .gitattributes carries no LFS rule.
 # NOT-STRIPPED   -> a STRIP entry survived (a §3 rm line was missed/drifted).
 # MISSING-SHIP   -> a SHIP entry was over-stripped or never archived.
 # UNCLASSIFIED-IN-SNAPSHOT -> an unknown top-level entry reached the snapshot.
+# NESTED-NOT-STRIPPED -> a NESTED_STRIP entry (aesthetic-audit-shots/ or
+#                   aesthetic-audit.md) survived inside a SHIP dir — a §3 nested
+#                   rm line was missed/drifted.
+# LFS-RULE-PRESENT -> the shipped .gitattributes still carries a `filter=lfs`
+#                   rule; empty it (the `: > "$PUB/.gitattributes"` step in §3).
 # Any non-OK line is a STOP.
 ```
 
 This supersedes the old per-file `test ! -e` block: the five STRIP entries
 (`.agents`, `.replit`, `.replitignore`, `replit.md`, `replit.nix`) are now
-asserted absent by the manifest, not by a separate hand-synced list.
+asserted absent by the manifest, not by a separate hand-synced list. The same
+check now also asserts the nested tier — the `aesthetic-audit-shots/` dir and
+`aesthetic-audit.md` doc (the `NESTED_STRIP` list) are absent, and the shipped
+`.gitattributes` carries no Git LFS rule — so the §3 nested `rm` lines and the
+`.gitattributes` emptying can no longer silently drift from enforcement.
 
 ### 4.3 Git author / committer fields read DotMatrixIO only
 

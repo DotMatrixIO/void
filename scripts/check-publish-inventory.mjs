@@ -31,17 +31,23 @@
 // grep), not here. See docs/pre-publish-scrub-2026-06.md.
 
 import { execFileSync } from "node:child_process";
-import { readdirSync } from "node:fs";
+import { existsSync, readdirSync, readFileSync } from "node:fs";
 import { join, dirname } from "node:path";
 import { fileURLToPath } from "node:url";
 
-import { SHIP, STRIP } from "./publish-inventory-manifest.mjs";
+import { SHIP, STRIP, NESTED_STRIP } from "./publish-inventory-manifest.mjs";
 
 const REPO_ROOT = join(dirname(fileURLToPath(import.meta.url)), "..");
 
 const ship = new Set(SHIP);
 const strip = new Set(STRIP);
 const classified = new Set([...ship, ...strip]);
+
+// A .gitattributes line configures Git LFS if it carries the lfs filter driver.
+// The public snapshot must ship an LFS-free .gitattributes (the baseline shipped
+// it emptied): a lingering LFS pointer rule references blobs that never exist in
+// the fresh-history snapshot.
+const LFS_RULE = /\bfilter=lfs\b/;
 
 // Problems that are pure manifest config errors, checked in both modes.
 function manifestConfigProblems() {
@@ -54,8 +60,8 @@ function manifestConfigProblems() {
   return problems;
 }
 
-// Tracked top-level entries = first path segment of every tracked file, unique.
-function trackedTopLevel() {
+// Every tracked path (relative to REPO_ROOT), one per entry.
+function trackedPaths() {
   let out;
   try {
     out = execFileSync("git", ["ls-files", "-z"], {
@@ -70,13 +76,24 @@ function trackedTopLevel() {
         `--snapshot <dir>).\n  ${err.message}`,
     ]);
   }
+  return out.split("\0").filter(Boolean);
+}
+
+// Tracked top-level entries = first path segment of every tracked file, unique.
+function trackedTopLevel(paths) {
   const top = new Set();
-  for (const path of out.split("\0")) {
-    if (!path) continue;
+  for (const path of paths) {
     const slash = path.indexOf("/");
     top.add(slash === -1 ? path : path.slice(0, slash));
   }
   return top;
+}
+
+// A nested-strip entry is "present" in the tracked tree if it is either a tracked
+// file itself (exact match) or a directory prefix of at least one tracked file.
+function nestedPresentInTracked(entry, paths) {
+  const prefix = `${entry}/`;
+  return paths.some((p) => p === entry || p.startsWith(prefix));
 }
 
 // Top-level entries actually present on disk in a directory (incl. dotfiles).
@@ -106,7 +123,8 @@ function fail(problems) {
 }
 
 function runSourceMode() {
-  const tracked = trackedTopLevel();
+  const paths = trackedPaths();
+  const tracked = trackedTopLevel(paths);
   const problems = manifestConfigProblems();
 
   // (a) Every tracked top-level entry must be classified (fail-open closer).
@@ -130,11 +148,26 @@ function runSourceMode() {
     }
   }
 
+  // (c) Every NESTED_STRIP entry must still exist in the tracked tree, else the
+  //     list has rotted: a listed path was renamed/removed and now protects
+  //     nothing. Mirrors (b) for the nested tier.
+  for (const entry of [...NESTED_STRIP].sort()) {
+    if (!nestedPresentInTracked(entry, paths)) {
+      problems.push(
+        `STALE-NESTED-STRIP: nested-strip entry "${entry}" no longer exists in ` +
+          `the tracked tree. Update NESTED_STRIP in ` +
+          `scripts/publish-inventory-manifest.mjs (and the §3 nested rm list) so ` +
+          `the strip list cannot rot silently.`,
+      );
+    }
+  }
+
   if (problems.length > 0) fail(problems);
 
   console.log(
     `[check-publish-inventory] OK (source) — all ${tracked.size} tracked ` +
-      `top-level entr(ies) classified: ${ship.size} SHIP, ${strip.size} STRIP. ` +
+      `top-level entr(ies) classified: ${ship.size} SHIP, ${strip.size} STRIP; ` +
+      `${NESTED_STRIP.length} nested-strip entr(ies) still present in the tree. ` +
       `(Top-level scope; internal files inside SHIP dirs are covered by the §3 ` +
       `strip list and §4 content scans.)`,
   );
@@ -175,13 +208,46 @@ function runSnapshotMode(dir) {
     }
   }
 
+  // (g) No NESTED_STRIP entry may survive inside the snapshot. The top-level
+  //     checks above can't see these (they live under a SHIP dir), so an
+  //     un-stripped 354 MB of internal PNGs would otherwise sail through.
+  for (const entry of [...NESTED_STRIP].sort()) {
+    if (existsSync(join(dir, entry))) {
+      problems.push(
+        `NESTED-NOT-STRIPPED: "${entry}" is a nested-strip entry but is still ` +
+          `present in "${dir}". Add its \`rm\` to the §3 nested strip list — it ` +
+          `must not reach the public snapshot.`,
+      );
+    }
+  }
+
+  // (h) The shipped .gitattributes must carry no Git LFS rule. The baseline
+  //     ships it emptied; a lingering `filter=lfs` rule points at LFS blobs that
+  //     don't exist in the fresh-history snapshot.
+  const gaPath = join(dir, ".gitattributes");
+  if (existsSync(gaPath)) {
+    const ga = readFileSync(gaPath, "utf8");
+    const lfsLines = ga
+      .split(/\r?\n/)
+      .filter((line) => LFS_RULE.test(line))
+      .map((line) => line.trim());
+    if (lfsLines.length > 0) {
+      problems.push(
+        `LFS-RULE-PRESENT: "${gaPath}" contains ${lfsLines.length} Git LFS ` +
+          `rule(s) (${lfsLines.join(" | ")}). The public snapshot must carry no ` +
+          `LFS configuration — empty .gitattributes (the baseline shipped it empty).`,
+      );
+    }
+  }
+
   if (problems.length > 0) fail(problems);
 
   console.log(
     `[check-publish-inventory] OK (snapshot) — "${dir}" matches the manifest: ` +
       `all ${ship.size} SHIP entr(ies) present, all ${strip.size} STRIP entr(ies) ` +
-      `absent, no unclassified top-level entries. (Top-level scope; run the §4 ` +
-      `content scans for inside-dir material.)`,
+      `absent, no unclassified top-level entries; all ${NESTED_STRIP.length} ` +
+      `nested-strip entr(ies) absent and .gitattributes carries no LFS rule. ` +
+      `(Top-level scope; run the §4 content scans for inside-dir material.)`,
   );
 }
 

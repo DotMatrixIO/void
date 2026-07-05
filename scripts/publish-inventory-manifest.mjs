@@ -72,3 +72,22 @@ export const STRIP = [
   "replit.md", // internal dev/agent context incl. a "User preferences" section
   "replit.nix", // Replit Nix env — plants a "built on Replit" flag
 ];
+
+// Tier 2: NESTED strips — internal material that lives INSIDE a SHIP dir and so
+// cannot be expressed by the top-level SHIP/STRIP scheme above (artifacts/ and
+// docs/ both ship, but specific files/dirs deep inside them must not). Each path
+// is relative to the tree root. check-publish-inventory.mjs enforces these in
+// snapshot mode (they must be ABSENT from the candidate tree) and guards them
+// against rot in source mode (each must still exist in the tracked tree, or the
+// list has gone stale). Keep in lockstep with the §3 nested `rm` commands in
+// docs/pre-publish-scrub-2026-06.md.
+//
+// WHY: without this, ~354 MB of internal design-review PNGs under
+// aesthetic-audit-shots/ (and the aesthetic-audit.md doc they belong to) ship by
+// default — `git archive HEAD` carries the whole tracked tree — ballooning the
+// public repo from ~29 MB to ~381 MB. They were stripped only by memory/ad-hoc
+// commands and enforced by nothing.
+export const NESTED_STRIP = [
+  "artifacts/void-client/docs/aesthetic-audit-shots", // ~354 MB internal design-review PNGs
+  "artifacts/void-client/docs/aesthetic-audit.md", // internal aesthetic-audit doc the shots belong to
+];

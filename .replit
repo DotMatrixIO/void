@@ -126,6 +126,10 @@ args = "release-onion-bake"
 task = "workflow.run"
 args = "preflight-build-vars"
 
+[[workflows.workflow.tasks]]
+task = "workflow.run"
+args = "publish-inventory-test"
+
 [[workflows.workflow]]
 name = "api-server-tests"
 author = "agent"
@@ -408,6 +412,17 @@ author = "agent"
 [[workflows.workflow.tasks]]
 task = "shell.exec"
 args = "pnpm --filter @workspace/scripts run test:preflight-build-vars"
+
+[workflows.workflow.metadata]
+isValidation = true
+
+[[workflows.workflow]]
+name = "publish-inventory-test"
+author = "agent"
+
+[[workflows.workflow.tasks]]
+task = "shell.exec"
+args = "pnpm --filter @workspace/scripts run test:publish-inventory"
 
 [workflows.workflow.metadata]
 isValidation = true
