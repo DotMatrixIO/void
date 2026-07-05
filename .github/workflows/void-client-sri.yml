@@ -1,0 +1,123 @@
+# Pre-deploy SRI gate (task #294).
+#
+# `artifacts/void-client/src/__tests__/sri.test.ts` self-skips when
+# `dist/public/` is absent, so a CI job that runs `pnpm test` without
+# first building can report green even when the SRI post-build chain
+# (gen-og-pages / add-sri / add-modulepreload-sri) is silently broken.
+# This workflow closes that gap: build first, verify the build emitted
+# the files the SRI tests inspect, then run the test suite with
+# `STRICT_SRI=1` so a missing build becomes a hard failure.
+
+name: void-client SRI pre-deploy gate
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - "artifacts/void-client/**"
+      - "attached_assets/**"
+      - "package.json"
+      - "pnpm-workspace.yaml"
+      - "pnpm-lock.yaml"
+      - ".github/workflows/void-client-sri.yml"
+  pull_request:
+    branches: [main]
+    paths:
+      - "artifacts/void-client/**"
+      - "attached_assets/**"
+      - "package.json"
+      - "pnpm-workspace.yaml"
+      - "pnpm-lock.yaml"
+      - ".github/workflows/void-client-sri.yml"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  sri-gate:
+    name: Build void-client and run SRI tests against dist/public
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Set up pnpm (pinned, matches pnpm-audit.yml)
+        uses: pnpm/action-setup@v4
+        with:
+          run_install: false
+
+      - name: Set up Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: pnpm
+
+      # VITE_VOID_ONION_HOST and PUBLIC_ORIGIN are both baked into the
+      # production void-client bundle, and a NODE_ENV=production build fails
+      # CLOSED without them (onion-bake guard in vite.config.ts + gen-og-pages
+      # strict mode). That failure otherwise surfaces deep in the build with a
+      # cryptic exit, so assert both up front. The validation lives in one
+      # shared script (scripts/preflight-build-vars.mjs) that this step and the
+      # release.yml preflight job both invoke, so they can never drift; it
+      # reuses the build's own validators (onionHost.ts, originRules.mjs).
+      # Runs before the heavier pnpm install / build so a missing variable
+      # still fails fast. --experimental-strip-types lets the shared script
+      # import the .ts validator on this Node version.
+      - name: Preflight — required build variables set and valid
+        env:
+          VITE_VOID_ONION_HOST: ${{ vars.VITE_VOID_ONION_HOST }}
+          PUBLIC_ORIGIN: ${{ vars.PUBLIC_ORIGIN }}
+        run: node --experimental-strip-types scripts/preflight-build-vars.mjs
+
+      - name: Install dependencies (frozen lockfile)
+        run: pnpm install --frozen-lockfile --prefer-offline
+
+      - name: Build void-client (production)
+        # PORT and BASE_PATH are required at vite.config.ts load time.
+        # Values match the production Dockerfile; keep them in sync if
+        # the Dockerfile ever changes.
+        env:
+          NODE_ENV: production
+          PORT: "3000"
+          BASE_PATH: /
+          # A NODE_ENV=production build fails closed twice: the onion-bake guard
+          # (vite.config.ts) needs a valid v3 VITE_VOID_ONION_HOST, and
+          # gen-og-pages needs an absolute PUBLIC_ORIGIN. Both are sourced from
+          # the public repo VARIABLES, same as release.yml. Their exact values
+          # don't affect SRI (this job only checks integrity attributes), but
+          # they must be present or the build never reaches the SRI step.
+          VITE_VOID_ONION_HOST: ${{ vars.VITE_VOID_ONION_HOST }}
+          PUBLIC_ORIGIN: ${{ vars.PUBLIC_ORIGIN }}
+        run: pnpm --filter @workspace/void-client run build
+
+      - name: Verify build outputs exist
+        # Belt-and-braces: the STRICT_SRI assertion in sri.test.ts will
+        # also catch this, but failing here gives a clearer error.
+        run: |
+          set -euo pipefail
+          DIST=artifacts/void-client/dist/public
+          if [ ! -f "$DIST/index.html" ]; then
+            echo "::error::Build did not produce $DIST/index.html"
+            exit 1
+          fi
+          if [ ! -f "$DIST/.vite/manifest.json" ]; then
+            echo "::error::Build did not produce $DIST/.vite/manifest.json"
+            exit 1
+          fi
+
+      - name: Run SRI regression tests (strict mode)
+        # Scoped to the SRI test file: this gate exists to validate the
+        # post-build SRI chain on every release candidate. Running the
+        # full `pnpm test` suite would couple this gate to unrelated
+        # test failures (RoomPage, etc.) that have their own CI/Replit
+        # workflow coverage. STRICT_SRI=1 turns the self-skip-on-
+        # missing-build behaviour in sri.test.ts into a hard failure.
+        env:
+          STRICT_SRI: "1"
+        run: |
+          pnpm --filter @workspace/void-client exec vitest run \
+            --config vitest.config.ts \
+            src/__tests__/sri.test.ts

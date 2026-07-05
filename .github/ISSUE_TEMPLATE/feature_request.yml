@@ -1,0 +1,52 @@
+# SPDX-License-Identifier: AGPL-3.0-or-later
+name: Feature request
+description: Suggest a change. Read the feature policy first — VOID stays small on purpose.
+labels: ["enhancement"]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        VOID is a room, not a building. It refuses features that make calls
+        persist or that turn it into an office suite: recording, transcription,
+        file transfer, accounts, AI summaries, and so on.
+
+        **Read `VOID-Feature-Policy.md` before filing.** Most feature requests
+        are declined because they are out of scope by design, not because they
+        are bad ideas. If yours is one of those, that is fine — but knowing the
+        policy saves us both time.
+  - type: checkboxes
+    id: preflight
+    attributes:
+      label: Before you file
+      options:
+        - label: I read VOID-Feature-Policy.md and believe this fits VOID's scope.
+          required: true
+        - label: I searched existing issues and this is not a duplicate.
+          required: true
+  - type: textarea
+    id: problem
+    attributes:
+      label: The problem
+      description: What can't you do today? Describe the situation, not the solution.
+    validations:
+      required: true
+  - type: textarea
+    id: proposal
+    attributes:
+      label: What you'd like
+      description: What should change? Keep it concrete.
+    validations:
+      required: true
+  - type: textarea
+    id: scope
+    attributes:
+      label: Why this fits the feature policy
+      description: Point to the part of VOID-Feature-Policy.md that supports this. Does it add anything that outlives the call?
+    validations:
+      required: true
+  - type: textarea
+    id: alternatives
+    attributes:
+      label: Alternatives you considered
+    validations:
+      required: false

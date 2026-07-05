@@ -1,0 +1,516 @@
+{
+  "ranAt": "2026-06-11T18:38:27.284Z",
+  "iterations": 5,
+  "paths": [
+    "BURN",
+    "leave",
+    "expire",
+    "PreviewGate unmount"
+  ],
+  "results": [
+    {
+      "browser": "chromium",
+      "version": "141.0.7390.37",
+      "os": "linux 6.18.34",
+      "path": "BURN",
+      "iterations": 5,
+      "perIteration": [
+        {
+          "created": 1,
+          "closed": 1,
+          "aliveCount": 0,
+          "aliveStates": [],
+          "workletsCreated": 1,
+          "workletsAlive": 0
+        },
+        {
+          "created": 2,
+          "closed": 2,
+          "aliveCount": 0,
+          "aliveStates": [],
+          "workletsCreated": 2,
+          "workletsAlive": 0
+        },
+        {
+          "created": 3,
+          "closed": 3,
+          "aliveCount": 0,
+          "aliveStates": [],
+          "workletsCreated": 3,
+          "workletsAlive": 0
+        },
+        {
+          "created": 4,
+          "closed": 4,
+          "aliveCount": 0,
+          "aliveStates": [],
+          "workletsCreated": 4,
+          "workletsAlive": 0
+        },
+        {
+          "created": 5,
+          "closed": 5,
+          "aliveCount": 0,
+          "aliveStates": [],
+          "workletsCreated": 5,
+          "workletsAlive": 0
+        }
+      ],
+      "final": {
+        "created": 5,
+        "closed": 5,
+        "aliveCount": 0,
+        "aliveStates": [],
+        "workletsCreated": 5,
+        "workletsAlive": 0
+      },
+      "error": null
+    },
+    {
+      "browser": "chromium",
+      "version": "141.0.7390.37",
+      "os": "linux 6.18.34",
+      "path": "leave",
+      "iterations": 5,
+      "perIteration": [
+        {
+          "created": 6,
+          "closed": 6,
+          "aliveCount": 0,
+          "aliveStates": [],
+          "workletsCreated": 6,
+          "workletsAlive": 0
+        },
+        {
+          "created": 7,
+          "closed": 7,
+          "aliveCount": 0,
+          "aliveStates": [],
+          "workletsCreated": 7,
+          "workletsAlive": 0
+        },
+        {
+          "created": 8,
+          "closed": 8,
+          "aliveCount": 0,
+          "aliveStates": [],
+          "workletsCreated": 8,
+          "workletsAlive": 0
+        },
+        {
+          "created": 9,
+          "closed": 9,
+          "aliveCount": 0,
+          "aliveStates": [],
+          "workletsCreated": 9,
+          "workletsAlive": 0
+        },
+        {
+          "created": 10,
+          "closed": 10,
+          "aliveCount": 0,
+          "aliveStates": [],
+          "workletsCreated": 10,
+          "workletsAlive": 0
+        }
+      ],
+      "final": {
+        "created": 10,
+        "closed": 10,
+        "aliveCount": 0,
+        "aliveStates": [],
+        "workletsCreated": 10,
+        "workletsAlive": 0
+      },
+      "error": null
+    },
+    {
+      "browser": "chromium",
+      "version": "141.0.7390.37",
+      "os": "linux 6.18.34",
+      "path": "expire",
+      "iterations": 5,
+      "perIteration": [
+        {
+          "created": 11,
+          "closed": 11,
+          "aliveCount": 0,
+          "aliveStates": [],
+          "workletsCreated": 11,
+          "workletsAlive": 0
+        },
+        {
+          "created": 12,
+          "closed": 12,
+          "aliveCount": 0,
+          "aliveStates": [],
+          "workletsCreated": 12,
+          "workletsAlive": 0
+        },
+        {
+          "created": 13,
+          "closed": 13,
+          "aliveCount": 0,
+          "aliveStates": [],
+          "workletsCreated": 13,
+          "workletsAlive": 0
+        },
+        {
+          "created": 14,
+          "closed": 14,
+          "aliveCount": 0,
+          "aliveStates": [],
+          "workletsCreated": 14,
+          "workletsAlive": 0
+        },
+        {
+          "created": 15,
+          "closed": 15,
+          "aliveCount": 0,
+          "aliveStates": [],
+          "workletsCreated": 15,
+          "workletsAlive": 0
+        }
+      ],
+      "final": {
+        "created": 15,
+        "closed": 15,
+        "aliveCount": 0,
+        "aliveStates": [],
+        "workletsCreated": 15,
+        "workletsAlive": 0
+      },
+      "error": null
+    },
+    {
+      "browser": "chromium",
+      "version": "141.0.7390.37",
+      "os": "linux 6.18.34",
+      "path": "PreviewGate unmount",
+      "iterations": 5,
+      "perIteration": [
+        {
+          "created": 16,
+          "closed": 16,
+          "aliveCount": 0,
+          "aliveStates": [],
+          "workletsCreated": 16,
+          "workletsAlive": 0
+        },
+        {
+          "created": 17,
+          "closed": 17,
+          "aliveCount": 0,
+          "aliveStates": [],
+          "workletsCreated": 17,
+          "workletsAlive": 0
+        },
+        {
+          "created": 18,
+          "closed": 18,
+          "aliveCount": 0,
+          "aliveStates": [],
+          "workletsCreated": 18,
+          "workletsAlive": 0
+        },
+        {
+          "created": 19,
+          "closed": 19,
+          "aliveCount": 0,
+          "aliveStates": [],
+          "workletsCreated": 19,
+          "workletsAlive": 0
+        },
+        {
+          "created": 20,
+          "closed": 20,
+          "aliveCount": 0,
+          "aliveStates": [],
+          "workletsCreated": 20,
+          "workletsAlive": 0
+        }
+      ],
+      "final": {
+        "created": 20,
+        "closed": 20,
+        "aliveCount": 0,
+        "aliveStates": [],
+        "workletsCreated": 20,
+        "workletsAlive": 0
+      },
+      "error": null
+    },
+    {
+      "browser": "firefox",
+      "version": "142.0.1",
+      "os": "linux 6.18.34",
+      "path": "BURN",
+      "iterations": 5,
+      "perIteration": [
+        {
+          "created": 1,
+          "closed": 1,
+          "aliveCount": 0,
+          "aliveStates": [],
+          "workletsCreated": 1,
+          "workletsAlive": 0
+        },
+        {
+          "created": 2,
+          "closed": 2,
+          "aliveCount": 0,
+          "aliveStates": [],
+          "workletsCreated": 2,
+          "workletsAlive": 0
+        },
+        {
+          "created": 3,
+          "closed": 3,
+          "aliveCount": 0,
+          "aliveStates": [],
+          "workletsCreated": 3,
+          "workletsAlive": 0
+        },
+        {
+          "created": 4,
+          "closed": 4,
+          "aliveCount": 0,
+          "aliveStates": [],
+          "workletsCreated": 4,
+          "workletsAlive": 0
+        },
+        {
+          "created": 5,
+          "closed": 5,
+          "aliveCount": 0,
+          "aliveStates": [],
+          "workletsCreated": 5,
+          "workletsAlive": 0
+        }
+      ],
+      "final": {
+        "created": 5,
+        "closed": 5,
+        "aliveCount": 0,
+        "aliveStates": [],
+        "workletsCreated": 5,
+        "workletsAlive": 0
+      },
+      "error": null
+    },
+    {
+      "browser": "firefox",
+      "version": "142.0.1",
+      "os": "linux 6.18.34",
+      "path": "leave",
+      "iterations": 5,
+      "perIteration": [
+        {
+          "created": 6,
+          "closed": 6,
+          "aliveCount": 0,
+          "aliveStates": [],
+          "workletsCreated": 6,
+          "workletsAlive": 0
+        },
+        {
+          "created": 7,
+          "closed": 7,
+          "aliveCount": 0,
+          "aliveStates": [],
+          "workletsCreated": 7,
+          "workletsAlive": 0
+        },
+        {
+          "created": 8,
+          "closed": 8,
+          "aliveCount": 0,
+          "aliveStates": [],
+          "workletsCreated": 8,
+          "workletsAlive": 0
+        },
+        {
+          "created": 9,
+          "closed": 9,
+          "aliveCount": 0,
+          "aliveStates": [],
+          "workletsCreated": 9,
+          "workletsAlive": 0
+        },
+        {
+          "created": 10,
+          "closed": 10,
+          "aliveCount": 0,
+          "aliveStates": [],
+          "workletsCreated": 10,
+          "workletsAlive": 0
+        }
+      ],
+      "final": {
+        "created": 10,
+        "closed": 10,
+        "aliveCount": 0,
+        "aliveStates": [],
+        "workletsCreated": 10,
+        "workletsAlive": 0
+      },
+      "error": null
+    },
+    {
+      "browser": "firefox",
+      "version": "142.0.1",
+      "os": "linux 6.18.34",
+      "path": "expire",
+      "iterations": 5,
+      "perIteration": [
+        {
+          "created": 11,
+          "closed": 11,
+          "aliveCount": 0,
+          "aliveStates": [],
+          "workletsCreated": 11,
+          "workletsAlive": 0
+        },
+        {
+          "created": 12,
+          "closed": 12,
+          "aliveCount": 0,
+          "aliveStates": [],
+          "workletsCreated": 12,
+          "workletsAlive": 0
+        },
+        {
+          "created": 13,
+          "closed": 13,
+          "aliveCount": 0,
+          "aliveStates": [],
+          "workletsCreated": 13,
+          "workletsAlive": 0
+        },
+        {
+          "created": 14,
+          "closed": 14,
+          "aliveCount": 0,
+          "aliveStates": [],
+          "workletsCreated": 14,
+          "workletsAlive": 0
+        },
+        {
+          "created": 15,
+          "closed": 15,
+          "aliveCount": 0,
+          "aliveStates": [],
+          "workletsCreated": 15,
+          "workletsAlive": 0
+        }
+      ],
+      "final": {
+        "created": 15,
+        "closed": 15,
+        "aliveCount": 0,
+        "aliveStates": [],
+        "workletsCreated": 15,
+        "workletsAlive": 0
+      },
+      "error": null
+    },
+    {
+      "browser": "firefox",
+      "version": "142.0.1",
+      "os": "linux 6.18.34",
+      "path": "PreviewGate unmount",
+      "iterations": 5,
+      "perIteration": [
+        {
+          "created": 16,
+          "closed": 16,
+          "aliveCount": 0,
+          "aliveStates": [],
+          "workletsCreated": 16,
+          "workletsAlive": 0
+        },
+        {
+          "created": 17,
+          "closed": 17,
+          "aliveCount": 0,
+          "aliveStates": [],
+          "workletsCreated": 17,
+          "workletsAlive": 0
+        },
+        {
+          "created": 18,
+          "closed": 18,
+          "aliveCount": 0,
+          "aliveStates": [],
+          "workletsCreated": 18,
+          "workletsAlive": 0
+        },
+        {
+          "created": 19,
+          "closed": 19,
+          "aliveCount": 0,
+          "aliveStates": [],
+          "workletsCreated": 19,
+          "workletsAlive": 0
+        },
+        {
+          "created": 20,
+          "closed": 20,
+          "aliveCount": 0,
+          "aliveStates": [],
+          "workletsCreated": 20,
+          "workletsAlive": 0
+        }
+      ],
+      "final": {
+        "created": 20,
+        "closed": 20,
+        "aliveCount": 0,
+        "aliveStates": [],
+        "workletsCreated": 20,
+        "workletsAlive": 0
+      },
+      "error": null
+    },
+    {
+      "browser": "webkit",
+      "version": null,
+      "os": "linux 6.18.34",
+      "path": "BURN",
+      "iterations": 5,
+      "perIteration": [],
+      "final": null,
+      "error": "browserType.launch: Executable doesn't exist at /home/runner/workspace/.cache/ms-playwright/webkit-2215/pw_run.sh\n╔═════════════════════════════════════════════════════════════════════════╗\n║ Looks like Playwright Test or Playwright was just installed or updated. ║\n║ Please run the following command to download new browsers:              ║\n║                                                                         ║\n║     npx playwright install                                              ║\n║                                                                         ║\n║ <3 Playwright Team                                                      ║\n╚═════════════════════════════════════════════════════════════════════════╝\n    at runBrowser (/home/runner/workspace/tools/audio-leak-verify/verify.mjs:135:30)\n    at /home/runner/workspace/tools/audio-leak-verify/verify.mjs:198:22"
+    },
+    {
+      "browser": "webkit",
+      "version": null,
+      "os": "linux 6.18.34",
+      "path": "leave",
+      "iterations": 5,
+      "perIteration": [],
+      "final": null,
+      "error": "browserType.launch: Executable doesn't exist at /home/runner/workspace/.cache/ms-playwright/webkit-2215/pw_run.sh\n╔═════════════════════════════════════════════════════════════════════════╗\n║ Looks like Playwright Test or Playwright was just installed or updated. ║\n║ Please run the following command to download new browsers:              ║\n║                                                                         ║\n║     npx playwright install                                              ║\n║                                                                         ║\n║ <3 Playwright Team                                                      ║\n╚═════════════════════════════════════════════════════════════════════════╝\n    at runBrowser (/home/runner/workspace/tools/audio-leak-verify/verify.mjs:135:30)\n    at /home/runner/workspace/tools/audio-leak-verify/verify.mjs:198:22"
+    },
+    {
+      "browser": "webkit",
+      "version": null,
+      "os": "linux 6.18.34",
+      "path": "expire",
+      "iterations": 5,
+      "perIteration": [],
+      "final": null,
+      "error": "browserType.launch: Executable doesn't exist at /home/runner/workspace/.cache/ms-playwright/webkit-2215/pw_run.sh\n╔═════════════════════════════════════════════════════════════════════════╗\n║ Looks like Playwright Test or Playwright was just installed or updated. ║\n║ Please run the following command to download new browsers:              ║\n║                                                                         ║\n║     npx playwright install                                              ║\n║                                                                         ║\n║ <3 Playwright Team                                                      ║\n╚═════════════════════════════════════════════════════════════════════════╝\n    at runBrowser (/home/runner/workspace/tools/audio-leak-verify/verify.mjs:135:30)\n    at /home/runner/workspace/tools/audio-leak-verify/verify.mjs:198:22"
+    },
+    {
+      "browser": "webkit",
+      "version": null,
+      "os": "linux 6.18.34",
+      "path": "PreviewGate unmount",
+      "iterations": 5,
+      "perIteration": [],
+      "final": null,
+      "error": "browserType.launch: Executable doesn't exist at /home/runner/workspace/.cache/ms-playwright/webkit-2215/pw_run.sh\n╔═════════════════════════════════════════════════════════════════════════╗\n║ Looks like Playwright Test or Playwright was just installed or updated. ║\n║ Please run the following command to download new browsers:              ║\n║                                                                         ║\n║     npx playwright install                                              ║\n║                                                                         ║\n║ <3 Playwright Team                                                      ║\n╚═════════════════════════════════════════════════════════════════════════╝\n    at runBrowser (/home/runner/workspace/tools/audio-leak-verify/verify.mjs:135:30)\n    at /home/runner/workspace/tools/audio-leak-verify/verify.mjs:198:22"
+    }
+  ]
+}

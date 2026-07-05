@@ -1,0 +1,1 @@
+The price of a thing in USD changes over time. Same with Bitcoin. So, a 1-hour room is the price of a pack of gum, and a 24-hour room is a bag of chips. It's a small amount. Hopefully, calls feel close to free. It's our attempt at stopping spam bots.

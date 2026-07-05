@@ -1,0 +1,71 @@
+<!doctype html>
+<html>
+<head><meta charset="utf-8"><title>VOID audio teardown harness</title></head>
+<body>
+<h1>VOID audio teardown harness</h1>
+<p>Driven by tools/audio-leak-verify/verify.mjs (Playwright). Mirrors the
+two-stage <code>closeAudioContext</code> pattern from
+<code>artifacts/void-client/src/lib/sounds.ts</code> and the
+<code>AudioWorklet</code> teardown from
+<code>artifacts/void-client/src/lib/mediaPipeline.ts</code>.</p>
+<pre id="log"></pre>
+<script type="module">
+const log = (m) => { document.getElementById('log').textContent += m + '\n'; };
+
+// Worklet processor source — kept inline so the harness has no extra
+// fetches and the test runs in any browser regardless of CORS.
+const workletSrc = `
+class VoidVerifyProcessor extends AudioWorkletProcessor {
+  process() { return true; }
+}
+registerProcessor('void-verify', VoidVerifyProcessor);
+`;
+// Headless Chromium refuses to load AudioWorklet modules from blob: URLs
+// (it aborts with "The user aborted a request"), so fall back to a
+// data: URL which is accepted by Chromium / Firefox / WebKit alike.
+const workletUrl =
+  'data:application/javascript;base64,' + btoa(workletSrc);
+
+// Mirrors sounds.ts: per-session context owned by the page.
+let ctx = null;
+let workletNode = null;
+const beforeCloseHooks = [];
+
+async function start() {
+  ctx = new AudioContext();
+  await ctx.audioWorklet.addModule(workletUrl);
+  workletNode = new AudioWorkletNode(ctx, 'void-verify');
+  // Schedule an oscillator the way music.ts / sounds.ts do, so the
+  // "stop scheduled sources before close()" stage actually has work
+  // to do (Task #283 regression bait).
+  const osc = ctx.createOscillator();
+  const g = ctx.createGain();
+  g.gain.value = 0.0001; // inaudible; this runs unattended
+  osc.connect(g).connect(ctx.destination);
+  osc.start();
+  beforeCloseHooks.push(() => { try { osc.stop(); } catch {} });
+  workletNode.connect(ctx.destination);
+  log('started: state=' + ctx.state);
+}
+
+async function teardown() {
+  // Two-stage teardown — same order as sounds.ts L327:
+  //   hooks first (stop scheduled sources), then close().
+  for (const h of beforeCloseHooks) { try { h(); } catch {} }
+  beforeCloseHooks.length = 0;
+  if (workletNode) {
+    try { workletNode.port.close(); } catch {}
+    try { workletNode.disconnect(); } catch {}
+    workletNode = null;
+  }
+  if (ctx && ctx.state !== 'closed') {
+    await ctx.close();
+  }
+  ctx = null;
+  log('torn down');
+}
+
+window.__voidHarness = { start, teardown };
+</script>
+</body>
+</html>

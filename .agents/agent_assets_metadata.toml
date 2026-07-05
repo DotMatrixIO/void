@@ -1,0 +1,175 @@
+uploads = []
+
+[[generated]]
+id = "AvKEkWXU9NHf2qCcv0t-f"
+uri = "file://artifacts/biometric-demo-video/public/images/webcam-portrait.png"
+type = "image"
+title = "webcam portrait"
+
+[[generated]]
+id = "4N2ZvOEmxiroBB8zaJJ_P"
+uri = "file://artifacts/biometric-demo-video/public/images/void-gold.png"
+type = "image"
+title = "gold abstract portrait"
+
+[[generated]]
+id = "p7oUpfXZ_Vbb0XSLKQY_8"
+uri = "file://artifacts/coordination-demo-video/public/masks/mask-pixel.png"
+type = "image"
+title = "pixel mask tile"
+
+[[generated]]
+id = "Lx18IwRNFq2ciaD29Af5f"
+uri = "file://artifacts/coordination-demo-video/public/masks/mask-ascii.png"
+type = "image"
+title = "ascii mask tile"
+
+[[generated]]
+id = "692dH5XhARLs3BEu5IU9t"
+uri = "file://artifacts/coordination-demo-video/public/masks/mask-contour.png"
+type = "image"
+title = "contour mask tile"
+
+[[generated]]
+id = "NeYlAmxO98gbuwapfaEo7"
+uri = "file://artifacts/coordination-demo-video/public/masks/mask-silhouette.png"
+type = "image"
+title = "silhouette mask tile"
+
+[[outputs]]
+id = "U1DDc2O5aFgO8cDUeUhVa"
+uri = "file://2bit-technical-overview.md"
+type = "text"
+title = "2BIT Technical Architecture Overview"
+
+[[outputs]]
+id = "l_RB8HUul-RFbAufEIxEJ"
+uri = "file://SIFE_TECHNICAL_OVERVIEW.md"
+type = "text"
+title = "SIFE Technical Architecture Overview"
+
+[[outputs]]
+id = "9gV5SpOtY_Uo0vFye8fax"
+uri = "file://VOID-Marketing-Vision.md"
+type = "text"
+title = "VOID Marketing Vision & Strategy"
+
+[[outputs]]
+id = "D1pryhEwnGMsVxb0ctvrr"
+uri = "file://docs/app-copy-review.md"
+type = "text"
+title = "VOID — App Copy Review (paragraph-aware, user-visible only)"
+
+[[outputs]]
+id = "oQ9YL_Kja2AZoYh3PVLll"
+uri = "file://attached_assets/grant-drafts/opensats-application.md"
+type = "text"
+title = "OpenSats — Revised Application"
+
+[[outputs]]
+id = "buk2cfCzmYXw5rSS-TxoM"
+uri = "file://attached_assets/grant-drafts/hrf-application.md"
+type = "text"
+title = "HRF Bitcoin Dev Fund — Revised Application"
+
+[[outputs]]
+id = "ph3w-XZ4gTM6um1ps67uA"
+uri = "file://attached_assets/grant-drafts/geyser-launch-plan.md"
+type = "text"
+title = "Geyser Fund — Revised Launch Plan"
+
+[[outputs]]
+id = "RmrE126BPAaxtmGLA2aJ_"
+uri = "file://attached_assets/grant-drafts/README.md"
+type = "text"
+title = "Notes & remaining gaps before submission"
+
+[[outputs]]
+id = "MnFWTEDr2jZdScPfGwoUR"
+uri = "file://docs/agent-mode/decision.md"
+type = "text"
+title = "Agent Mode strategy decision artifact"
+
+[[outputs]]
+id = "er4lSakgiI1e1-azaDptX"
+uri = "file://screenshots/hero-variants-pick.jpg"
+type = "image"
+title = "Hero variants — 5 portrait options"
+
+[[outputs]]
+id = "SDkuAf7wQPgXyG79XXPQ5"
+uri = "file://screenshots/hero-variants-pick-v2.jpg"
+type = "image"
+title = "Hero variants v2 — portrait right, copy left, half-overlap"
+
+[[outputs]]
+id = "tuyyBM__NVkNhxWxLTOgH"
+uri = "file://screenshots/hero-iter-pick-v4.jpg"
+type = "image"
+title = "Hero — Iteration A (left) vs Iteration B (right)"
+
+[[outputs]]
+id = "M96YQVrGuYyVhoefuanIZ"
+uri = "file://artifacts/coordination-demo-video/public/audio/bg_music.mp3"
+type = "audio"
+title = "VOID coordination demo background music"
+
+[[outputs]]
+id = "mI_shZMp1VEKaH691vN-k"
+uri = "file://artifacts/biometric-demo-video/public/audio/voiceover.mp3"
+type = "audio"
+title = "biometric placeholder vo"
+
+[[outputs]]
+id = "a_JCx8KXe_Bd3HJvtHrpq"
+uri = "file://artifacts/coordination-demo-video/public/audio/voiceover.mp3"
+type = "audio"
+title = "coordination placeholder vo"
+
+[[outputs]]
+id = "fD62f8kdom9uadRjZKs49"
+uri = "file://attached_assets/coordination-vo/vo_clean.mp3"
+type = "audio"
+title = "VO — Clean (21.5s, pacing preserved)"
+
+[[outputs]]
+id = "MkL16pQYqi1HHvkSWHNty"
+uri = "file://attached_assets/coordination-vo/vo_tight.mp3"
+type = "audio"
+title = "VO — Tight (16.5s, pauses collapsed)"
+
+[[outputs]]
+id = "RRYG_oNs5H9XBO2aQzSEN"
+uri = "file://attached_assets/coordination-vo/vo_final_A.mp3"
+type = "audio"
+title = "VO Final A — burn line = S8 only (15.7s)"
+
+[[outputs]]
+id = "X5S6o49Y_u5GjdJ-dRdLu"
+uri = "file://attached_assets/coordination-vo/vo_final_B.mp3"
+type = "audio"
+title = "VO Final B — burn line = S7+S8 (14.0s)"
+
+[[outputs]]
+id = "E7gmg4KaEfqkPt0PdWvR6"
+uri = "file://attached_assets/coordination-vo/void_only.mp3"
+type = "audio"
+title = "Isolated \"void\" (0.84s)"
+
+[[outputs]]
+id = "EwwAuSJaEHHdBqmRDebqa"
+uri = "file://artifacts/biometric-demo-video/public/audio/music.mp3"
+type = "audio"
+title = "biometric steady bluegrass groove"
+
+[[outputs]]
+id = "CQ2fhzd-mw4JF5BHdfntF"
+uri = "file://LAUNCH-CHECKLIST-2.md"
+type = "text"
+title = "Launch Checklist 2"
+
+[[outputs]]
+id = "T0u2pCPzIRljifyb4V7lr"
+uri = "file://VOID_INTERNALS_STUDY.md"
+type = "text"
+title = "VOID Internals Study Sheet"

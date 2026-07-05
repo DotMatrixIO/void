@@ -1,0 +1,60 @@
+services:
+  void:
+    build:
+      context: .
+      args:
+        # Forward the operator's .env values into the image build. NODE_ENV
+        # defaults to production, which bakes the Tor .onion mirror into the
+        # bundle and FAILS CLOSED if VITE_VOID_ONION_HOST is unset/malformed.
+        # For the Quick Start local smoke test set NODE_ENV=development in
+        # .env: the onion-bake guard relaxes and the bundle builds
+        # clearnet-only, no onion address required. See README-selfhost §3/§5.
+        NODE_ENV: ${NODE_ENV:-production}
+        VITE_VOID_ONION_HOST: ${VITE_VOID_ONION_HOST:-}
+        # Absolute origin baked into social-card metadata. Required for a
+        # production build (NODE_ENV=production) or gen-og-pages fails closed.
+        PUBLIC_ORIGIN: ${PUBLIC_ORIGIN:-}
+    restart: unless-stopped
+    # Give the api-server up to 10s after SIGTERM to broadcast
+    # `server-shutdown` to every connected socket and drain its in-flight
+    # writes before docker escalates to SIGKILL. The container's own
+    # SHUTDOWN_DRAIN_MS (default 5000ms) leaves a safety margin inside
+    # this window for httpServer.close() to return.
+    stop_grace_period: 10s
+    ports:
+      - "3000:3000"
+    environment:
+      PORT: "3000"
+      # The runtime is pinned to production on purpose. This image is a bundled
+      # production artifact with no node_modules, so a development runtime would
+      # crash (the dev logger transport worker can't be resolved) and would also
+      # expose the dev-pay endpoint. Your .env NODE_ENV instead flows into the
+      # *build* (see the build.args above): NODE_ENV=development there relaxes the
+      # onion-bake guard for a clearnet-only smoke build. Build knob vs. runtime
+      # posture are deliberately separate; the container always runs hardened.
+      NODE_ENV: production
+      SERVE_STATIC: "1"
+      CLIENT_DIST: ./client
+      PAYWALL_SECRET: ${PAYWALL_SECRET:-}
+      LIGHTNING_BACKEND: ${LIGHTNING_BACKEND:-mock}
+      # Per-request deadline (ms) for Lightning backend calls. Shipped here so
+      # `.env` alone reaches the container (empty = the server's 8000 default);
+      # raise it when reaching your node over a slow Tor hop (see README §4b).
+      LIGHTNING_FETCH_TIMEOUT_MS: ${LIGHTNING_FETCH_TIMEOUT_MS:-}
+      LNBITS_URL: ${LNBITS_URL:-}
+      LNBITS_API_KEY: ${LNBITS_API_KEY:-}
+      BTCPAY_URL: ${BTCPAY_URL:-}
+      BTCPAY_API_KEY: ${BTCPAY_API_KEY:-}
+      BTCPAY_STORE_ID: ${BTCPAY_STORE_ID:-}
+      TURN_URL: ${TURN_URL:-}
+      TURN_SECRET: ${TURN_SECRET:-}
+      TURN_CREDENTIAL_TTL: ${TURN_CREDENTIAL_TTL:-4500}
+      STUN_URL: ${STUN_URL:-}
+
+  coturn:
+    image: coturn/coturn:latest
+    restart: unless-stopped
+    network_mode: host
+    volumes:
+      - ./coturn/turnserver.conf:/etc/turnserver.conf:ro
+    command: ["-c", "/etc/turnserver.conf"]

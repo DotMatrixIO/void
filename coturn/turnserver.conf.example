@@ -1,0 +1,76 @@
+# ─── VOID Coturn Configuration ──────────────────────────────────────
+# Minimal Coturn config for use with VOID's ephemeral HMAC-SHA1 credentials.
+#
+# SETUP:
+#   1. Copy this file to turnserver.conf (gitignored — kept out of the repo
+#      so a real secret is never committed by accident):
+#        cp coturn/turnserver.conf.example coturn/turnserver.conf
+#   2. Generate a strong random secret:
+#        openssl rand -hex 32
+#   3. Replace YOUR_SECRET_HERE below with the generated value.
+#   4. Set the SAME secret on the API server via TURN_SECRET env var.
+#      The API server refuses to start if TURN_SECRET is the placeholder.
+#
+# Required VOID env vars (set these on the API server):
+#   TURN_URL=turn:your-server.example.com:3478
+#   TURN_SECRET=<same-value-as-static-auth-secret-below>
+#   TURN_CREDENTIAL_TTL=4500   (optional, default = room TTL + 10min buffer = 4500s, range 300-86400)
+#   STUN_URL=stun:your-server.example.com:3478   (optional, self-hosted STUN)
+#
+# TURN Credential TTL Note:
+#   Room TTL is 65 minutes (3900s). The default credential TTL is 4500s
+#   (room TTL + 10min safety buffer) to prevent late-session ICE restart
+#   failures when TURN credentials expire before the room does.
+#   If you change TURN_CREDENTIAL_TTL, ensure it exceeds room TTL.
+#
+# When TURN_URL + TURN_SECRET are set, Google STUN servers are NOT used.
+# STUN_URL is strongly recommended for non-relay rooms — without it,
+# only relay candidates will be gathered (no srflx/host discovery via STUN).
+# Without any TURN config, Google STUN is used as a dev-only fallback.
+#
+# Install: apt install coturn   (or use the official Docker image)
+# Run:     turnserver -c /etc/turnserver.conf
+# ─────────────────────────────────────────────────────────────────────
+
+# ── Networking ──
+listening-port=3478
+tls-listening-port=5349
+
+# External IP (required if behind NAT). Replace with your public IP.
+# external-ip=203.0.113.1/10.0.0.1
+
+# Restrict relay port range for firewall rules
+min-port=49152
+max-port=65535
+
+# ── Authentication ──
+# use-auth-secret enables ephemeral credential mode (HMAC-SHA1).
+# VOID generates credentials using this same secret.
+use-auth-secret
+# ⚠️  REPLACE BEFORE DEPLOY ⚠️
+# Generate a fresh secret with:   openssl rand -hex 32
+# Use the SAME value here and in the API server's TURN_SECRET env var.
+#
+# The API server refuses to start if TURN_SECRET is left at this placeholder
+# value (or any other known placeholder). Running with the placeholder turns
+# this Coturn into a publicly-usable open relay.
+static-auth-secret=YOUR_SECRET_HERE
+
+# ── Realm ──
+realm=void.example.com
+
+# ── TLS (recommended for production) ──
+# cert=/etc/letsencrypt/live/turn.example.com/fullchain.pem
+# pkey=/etc/letsencrypt/live/turn.example.com/privkey.pem
+
+# ── Security hardening ──
+no-multicast-peers
+no-cli
+denied-peer-ip=10.0.0.0-10.255.255.255
+denied-peer-ip=172.16.0.0-172.31.255.255
+denied-peer-ip=192.168.0.0-192.168.255.255
+denied-peer-ip=127.0.0.0-127.255.255.255
+
+# ── Logging ──
+log-file=/var/log/turnserver.log
+verbose

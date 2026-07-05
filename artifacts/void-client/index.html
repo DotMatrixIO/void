@@ -1,0 +1,144 @@
+<!DOCTYPE html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1" />
+    <!--
+      The og:* / twitter:* tags below carry this route's social card. The
+      values in the source index.html are the LANDING card; at build time
+      scripts/gen-og-pages.mjs duplicates this file into one <slug>.html
+      per marketing route and rewrites the tags to match (see
+      scripts/og-routes.mjs). The regex selectors in gen-og-pages.mjs
+      depend on the exact attribute ordering and quoting here — do not
+      reorder or single-quote without updating the script.
+    -->
+    <title>VOID | Ephemeral Video Rooms — Opens From a Link</title>
+    <meta name="description" content="Ephemeral video, nothing retained — no accounts, no room content stored. No app to install: it opens from a link. Up to 4 people over WebRTC." />
+    <meta name="theme-color" content="#14110D" />
+    <meta property="og:url" content="/" />
+    <meta property="og:type" content="website" />
+    <meta property="og:title" content="VOID | Ephemeral Video Rooms — Opens From a Link" />
+    <meta property="og:description" content="Ephemeral video, nothing retained — no accounts, no room content stored. No app to install: it opens from a link. Up to 4 people over WebRTC." />
+    <!--
+      og:image / twitter:image point at the editorial hero (1200x630),
+      not a templated route card. The landing route in scripts/og-routes.mjs
+      pins the same asset via its `image` override, so the build-time
+      rewrite in scripts/gen-og-pages.mjs preserves this value when it
+      stamps out index.html. Any unrouted SPA page (e.g. /why) falls
+      through to index.html and inherits the same preview.
+    -->
+    <meta property="og:image" content="/og/this-room-will-not-exist-social.jpg" />
+    <meta property="og:image:width" content="1200" />
+    <meta property="og:image:height" content="692" />
+    <meta name="twitter:card" content="summary_large_image" />
+    <meta name="twitter:title" content="VOID | Ephemeral Video Rooms — Opens From a Link" />
+    <meta name="twitter:description" content="Ephemeral video, nothing retained — no accounts, no room content stored. No app to install: it opens from a link. Up to 4 people over WebRTC." />
+    <meta name="twitter:image" content="/og/this-room-will-not-exist-social.jpg" />
+    <link rel="icon" href="/favicon.ico" sizes="any" />
+    <link rel="icon" href="/void-icon.png" type="image/png" sizes="180x180" />
+    <link rel="preload" as="image" href="/concrete.jpeg" fetchpriority="high" />
+    <link rel="manifest" href="manifest.json" />
+    <link rel="apple-touch-icon" sizes="120x120" href="/apple-touch-icon-120.png" />
+    <link rel="apple-touch-icon" sizes="152x152" href="/apple-touch-icon-152.png" />
+    <link rel="apple-touch-icon" sizes="167x167" href="/apple-touch-icon-167.png" />
+    <link rel="apple-touch-icon" sizes="180x180" href="/apple-touch-icon-180.png" />
+    <meta name="mobile-web-app-capable" content="yes" />
+    <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent" />
+    <meta name="apple-mobile-web-app-title" content="VOID" />
+    <link rel="apple-touch-startup-image" href="/splash/splash-750x1334.png"
+      media="(device-width: 375px) and (device-height: 667px) and (-webkit-device-pixel-ratio: 2) and (orientation: portrait)" />
+    <link rel="apple-touch-startup-image" href="/splash/splash-1170x2532.png"
+      media="(device-width: 390px) and (device-height: 844px) and (-webkit-device-pixel-ratio: 3) and (orientation: portrait)" />
+    <link rel="apple-touch-startup-image" href="/splash/splash-1179x2556.png"
+      media="(device-width: 393px) and (device-height: 852px) and (-webkit-device-pixel-ratio: 3) and (orientation: portrait)" />
+    <link rel="apple-touch-startup-image" href="/splash/splash-1290x2796.png"
+      media="(device-width: 430px) and (device-height: 932px) and (-webkit-device-pixel-ratio: 3) and (orientation: portrait)" />
+    <link rel="apple-touch-startup-image" href="/splash/splash-2048x2732.png"
+      media="(device-width: 1024px) and (device-height: 1366px) and (-webkit-device-pixel-ratio: 2) and (orientation: portrait)" />
+  </head>
+  <body>
+    <div id="root"></div>
+    <!--
+      SRI failure diagnostic. When add-sri.mjs has stamped integrity="…" onto
+      the entry script and stylesheet (production build), the browser fires an
+      `error` event on the offending element if the bytes don't match the hash
+      OR if the asset 404s. error events on resource loads do not bubble, so
+      the listener has to be registered in the capture phase. The script
+      itself is inline so it cannot be subject to SRI — if SRI took out our
+      diagnostic too, we would be back to a blank page. The overlay uses no
+      external fonts, no images, and no network — it has to render after the
+      rest of the page failed to load. See task-249 / task-243 §"Failure mode".
+    -->
+    <script>
+      (function () {
+        var shown = false;
+        function showIntegrityFailure() {
+          if (shown) return;
+          shown = true;
+          var bg = "#14110D";
+          var fg = "#F0EEE6";
+          var dim = "rgba(240,238,230,0.72)";
+          var stack =
+            "ui-monospace, SFMono-Regular, Menlo, Consolas, monospace";
+          var html =
+            '<div role="alert" aria-live="assertive" style="position:fixed;inset:0;background:' +
+            bg +
+            ';color:' +
+            fg +
+            ';font-family:' +
+            stack +
+            ';display:flex;align-items:center;justify-content:center;padding:24px;z-index:2147483647;">' +
+            '<div style="max-width:560px;text-align:left;line-height:1.5;">' +
+            '<div style="font-size:11px;letter-spacing:0.18em;text-transform:uppercase;opacity:0.6;margin-bottom:16px;">VOID // integrity check</div>' +
+            '<div style="font-size:18px;font-weight:600;margin-bottom:12px;">Something is wrong with this page.</div>' +
+            '<div style="font-size:14px;color:' +
+            dim +
+            ';margin-bottom:8px;">The page that loaded does not match what VOID published. Nothing on this page is safe to use right now.</div>' +
+            '<div style="font-size:14px;color:' +
+            dim +
+            ';">Do not join or create a room from here. Try a different network and reload. If you see this on more than one network, contact the site operator.</div>' +
+            "</div></div>";
+          var root = document.getElementById("root");
+          if (root) {
+            root.innerHTML = html;
+            return;
+          }
+          var host = document.body || document.documentElement;
+          if (!host) return;
+          var d = document.createElement("div");
+          d.innerHTML = html;
+          host.appendChild(d);
+        }
+        window.addEventListener(
+          "error",
+          function (e) {
+            var t = e && e.target;
+            if (!t || t === window) return;
+            if (!t.tagName || !t.getAttribute) return;
+            var name = String(t.tagName).toLowerCase();
+            if (name !== "script" && name !== "link") return;
+            if (!t.getAttribute("integrity")) return;
+            showIntegrityFailure();
+          },
+          true,
+        );
+        // Task #489 / H-02: the service worker (`public/sw.js`) re-verifies
+        // cached asset bytes against the SRI baseline before serving. On a
+        // fresh-fetch integrity mismatch (cache miss + new fetch ALSO
+        // mismatches the known hash), the SW postMessages every controlled
+        // client with `{ type: "void:integrity-failure", ... }`. We surface
+        // the same overlay the install-time SRI failure uses so the
+        // failure mode is identical whether the corruption arrives at
+        // install time or at serve time from cache.
+        if (navigator.serviceWorker) {
+          navigator.serviceWorker.addEventListener("message", function (ev) {
+            if (ev && ev.data && ev.data.type === "void:integrity-failure") {
+              showIntegrityFailure();
+            }
+          });
+        }
+      })();
+    </script>
+    <script type="module" src="/src/main.tsx"></script>
+  </body>
+</html>

@@ -1,0 +1,76 @@
+name: AsyncAPI Spec Drift
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - "lib/api-spec/asyncapi.yaml"
+      - "lib/api-spec/scripts/check-asyncapi-drift.mjs"
+      - "lib/api-spec/package.json"
+      - "artifacts/api-server/src/**"
+      - "artifacts/void-client/src/**"
+      - "artifacts/void-client/scripts/check-routes-overview-drift.mjs"
+      - "artifacts/void-client/scripts/check-threat-model-drift.mjs"
+      - "artifacts/void-client/package.json"
+      - "VOID_TECHNICAL_OVERVIEW.md"
+      - "docs/threat-model.md"
+      - "docs/client-threat-model.md"
+      - "package.json"
+      - "pnpm-workspace.yaml"
+      - "pnpm-lock.yaml"
+      - ".github/workflows/asyncapi-spec-drift.yml"
+  pull_request:
+    branches: [main]
+    paths:
+      - "lib/api-spec/asyncapi.yaml"
+      - "lib/api-spec/scripts/check-asyncapi-drift.mjs"
+      - "lib/api-spec/package.json"
+      - "artifacts/api-server/src/**"
+      - "artifacts/void-client/src/**"
+      - "artifacts/void-client/scripts/check-routes-overview-drift.mjs"
+      - "artifacts/void-client/scripts/check-threat-model-drift.mjs"
+      - "artifacts/void-client/package.json"
+      - "VOID_TECHNICAL_OVERVIEW.md"
+      - "docs/threat-model.md"
+      - "docs/client-threat-model.md"
+      - "package.json"
+      - "pnpm-workspace.yaml"
+      - "pnpm-lock.yaml"
+      - ".github/workflows/asyncapi-spec-drift.yml"
+
+permissions:
+  contents: read
+
+jobs:
+  asyncapi-drift:
+    name: Diff Socket.io emit/on call sites against AsyncAPI spec
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Set up pnpm
+        uses: pnpm/action-setup@v4
+
+      - name: Set up Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: pnpm
+
+      - name: Install dependencies
+        run: pnpm install --frozen-lockfile
+
+      - name: Check AsyncAPI signaling-channel drift
+        run: pnpm --filter @workspace/api-spec run check-asyncapi
+
+      - name: Check void-client routes vs VOID_TECHNICAL_OVERVIEW.md §6.2 drift
+        run: pnpm --filter @workspace/void-client run check:routes-overview
+
+      - name: Check hamburger menu / footer nav links vs router routes
+        run: pnpm --filter @workspace/void-client run check:nav-routes
+
+      - name: Check threat-model drift across docs/ and ThreatModelPage.tsx
+        run: pnpm --filter @workspace/void-client run check:threat-model-drift

@@ -1,0 +1,109 @@
+VOID — ONE-MINUTE DEMO
+Caption Script & Shot List
+0:00–0:05
+Title card. VOID logo on dark concrete. Chiptune blip.
+
+CAPTION:
+VOID
+Private video rooms.
+No accounts.
+
+0:05–0:12
+Screen recording. StartScreen. Host clicks NEW SESSION. Lightning invoice appears. Payment completes. Bleep.
+
+CAPTION:
+The host pays 1,000 sats.
+Approximately one cent.
+Enough to mean it.
+
+0:12–0:18
+The six-word VOID Phrase appears on screen. Host copies the link. Show the phrase clearly.
+
+CAPTION:
+Six words appear.
+These words are the room.
+Share them with someone you trust.
+
+0:18–0:25
+Split screen. Guest opens the link on a different device. No signup screen. No download prompt. They are in the room. Bloop on connect.
+
+CAPTION:
+The guest clicks the link.
+No account required.
+No account possible.
+They are in.
+
+0:25–0:40
+Split screen. Left: Clear mode — normal webcam. Right: Gold → Pixel → Contour → Silhouette → ASCII, cycling slowly. Then a voice mask toggle — the voice changes audibly.
+
+CAPTION (on Clear side):
+This is what most tools send.
+Your face. In full.
+Stored somewhere.
+Forever.
+
+CAPTION (on masked side):
+This is what VOID sends.
+
+Beat. Let the filters cycle.
+
+CAPTION:
+Enough presence to trust.
+Not enough to surveil.
+
+Voice mask toggles. The audio shifts.
+
+CAPTION:
+Your voice, too.
+Processed locally.
+Before it leaves your device.
+
+0:40–0:48
+Two people talking through the filters. Natural. Unhurried. Body language visible. A laugh, maybe.
+
+CAPTION:
+This is a real conversation.
+Between two real people.
+Who would prefer to remain that way.
+
+0:48–0:55
+Host leaves. The room disappears. Back to StartScreen. Clean. Empty. Nothing.
+
+CAPTION:
+The host leaves.
+The room is gone.
+Nothing was saved.
+Nothing was logged.
+Nothing remains.
+
+Beat.
+
+CAPTION:
+This was intentional.
+
+0:55–1:00
+Closing card. Dark concrete. Gold text. Silence.
+
+CAPTION:
+Meet in real time.
+Leave less behind.
+
+URL.
+
+1,000 SATS PER SESSION.
+NO ACCOUNT.
+LIGHTNING ONLY.
+
+Silence.
+
+PRODUCTION NOTES — UNCHANGED
+
+No narration. Captions only, in the mono/gold UI style. Chiptune sound effects from the app itself — the bleep on payment, the bloop on connect, the click on share. Screen recording at 320×240 native resolution, upscaled. The brutalist UI is the production design. The product is its own set.
+
+A NOTE ON THE SILENCE AT THE END
+
+Vonnegut ended things abruptly when he had said what needed saying.
+
+The room is gone. There is nothing left to show. Holding on the closing card for five seconds of silence is not a pacing choice. It is the point of the whole video, expressed without words.
+
+Let it breathe.

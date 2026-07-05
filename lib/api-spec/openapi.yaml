@@ -1,0 +1,481 @@
+openapi: 3.1.0
+info:
+  # Do not change the title, if the title changes, the import paths will be broken
+  title: Api
+  version: 0.1.0
+  description: |
+    HTTP API for the VOID signaling and paywall server.
+
+    Note: this document covers the public HTTP surface only. The
+    bidirectional Socket.io signaling channel (mounted at
+    `/api/socket.io`) is described in the sibling AsyncAPI 3.0 spec
+    `./asyncapi.yaml` and in `VOID_TECHNICAL_OVERVIEW.md` §3.5, and is
+    intentionally out of scope for this spec.
+servers:
+  - url: /api
+    description: Base API path
+tags:
+  - name: health
+    description: Health operations
+  - name: paywall
+    description: Lightning L402 paywall endpoints
+  - name: ice
+    description: ICE / TURN credential issuance
+  - name: spec
+    description: API specification discovery
+paths:
+  /healthz:
+    get:
+      operationId: healthCheck
+      tags: [health]
+      summary: Health check
+      description: Returns server health status
+      responses:
+        "200":
+          description: Healthy
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/HealthStatus"
+  /health:
+    get:
+      operationId: healthCheckAlias
+      tags: [health]
+      summary: Health check (alias)
+      description: |
+        Identical to `/healthz`. Provided for compatibility with
+        load-balancers and probes that expect the bare `/health`
+        path.
+      responses:
+        "200":
+          description: Healthy
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/HealthStatus"
+  /paywall/invoice:
+    post:
+      operationId: createInvoice
+      tags: [paywall]
+      summary: Create a Lightning invoice for a paid room
+      description: |
+        Creates a fresh Lightning invoice for a paid-room session.
+        The amount per tier is fixed server-side and cannot be
+        requested by the client. The returned `paymentHash` is the
+        opaque key used to poll for payment via
+        `GET /paywall/status/{paymentHash}`.
+
+        Tier is chosen by the optional request body. Omitting the
+        body (or omitting `tier`) defaults to `standard` (65-minute
+        room, 1,000 sats). `day` requests a 24-hour room (5,000 sats).
+        Any other value — including the legacy `week` tier removed in
+        Task #115 — is rejected with HTTP 400 to avoid silently
+        delivering a different room lifetime than the client paid for.
+      requestBody:
+        required: false
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/InvoiceRequest"
+      responses:
+        "200":
+          description: Invoice created
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/InvoiceResponse"
+        "400":
+          description: Unknown tier requested
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+        "500":
+          description: Failed to create invoice
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+  /paywall/status/{paymentHash}:
+    get:
+      operationId: getPaymentStatus
+      tags: [paywall]
+      summary: Poll for invoice payment, returning a JWT once paid
+      description: |
+        Returns `{ paid: false }` while the invoice is unpaid. Once
+        the Lightning backend reports the invoice settled, returns
+        `{ paid: true, token }` where `token` is a stateless HS256 JWT
+        valid for 1 hour. The JWT is presented to the signaling
+        channel when creating a paid room — it is a payment receipt,
+        not an identity, and does not gate joining an existing room.
+
+        Unknown hashes are not distinguished from unpaid invoices:
+        polling for a `paymentHash` the server has never seen returns
+        `{ paid: false }` with status 200, the same response a valid
+        but unpaid invoice would receive. This is intentional —
+        clients are expected to poll and never need a "not found"
+        signal — and means there is no 404 response for this route.
+      parameters:
+        - name: paymentHash
+          in: path
+          required: true
+          description: |
+            The 64-character hex `paymentHash` returned by
+            `POST /paywall/invoice`. BTCPay-backed deployments may
+            issue invoice IDs in non-hex formats; in that case the
+            server accepts any string of length >= 10.
+          schema:
+            type: string
+      responses:
+        "200":
+          description: |
+            Payment status. `paid: false` covers both "invoice exists
+            but is unsettled" and "no such invoice" — see endpoint
+            description.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/PaymentStatus"
+        "400":
+          description: Invalid payment hash
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+        "500":
+          description: Failed to check payment status
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+  /paywall/recover:
+    post:
+      operationId: recoverPaidWindow
+      tags: [paywall]
+      summary: Redeem a one-time recovery code for a fresh JWT
+      description: |
+        Redeems the 4-word BIP-39 recovery code that was returned alongside
+        the JWT in `GET /paywall/status/{paymentHash}` after a successful
+        payment. The code is single-use; the server deletes it on
+        successful redemption.
+
+        On success the server mints a new HS256 JWT whose `expiresIn`
+        is clamped to the **remaining** seconds of the original paid
+        window (it never extends the host's paid budget) and returns
+        `{ token, tier, expiresAt }`.
+
+        Errors are deliberately tight to avoid information leaks:
+        - `400` — code is malformed (wrong word count, non-letters).
+        - `404` — code is unknown OR has already been redeemed. The two
+          are conflated by design so a code-holder cannot probe for
+          map membership.
+        - `410` — the underlying paid window has already expired.
+        - `429` — too many recovery attempts from this IP. The route is
+          rate-limited per source IP to 10 attempts / 60 seconds to
+          stop brute-force search of the ~44-bit code space.
+
+        Recovery codes live in memory only; a server restart wipes
+        them in step with the JWT signing secret.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/RecoverRequest"
+      responses:
+        "200":
+          description: Code accepted, new JWT minted.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/RecoverResponse"
+        "400":
+          description: Malformed recovery code.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+        "404":
+          description: Recovery code not found or already redeemed.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+        "410":
+          description: Paid window has already expired.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+        "429":
+          description: Per-IP recovery attempt rate limit exceeded.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+  /paywall/dev-pay/{paymentHash}:
+    post:
+      operationId: devSimulatePayment
+      tags: [paywall]
+      summary: "Development-only: mark an invoice as paid"
+      description: |
+        Marks a pending mock invoice as paid so the next call to
+        `GET /paywall/status/{paymentHash}` returns a JWT. This route
+        is mounted only when `NODE_ENV !== "production"`; it returns
+        404 in production builds.
+
+        Provided so end-to-end tests and local development can
+        exercise the paywall without a Lightning node.
+      parameters:
+        - name: paymentHash
+          in: path
+          required: true
+          description: Payment hash from a prior invoice creation.
+          schema:
+            type: string
+      responses:
+        "200":
+          description: Simulation result. `ok` is `false` if the hash is unknown or already paid.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/DevPaymentResult"
+        "404":
+          description: Endpoint not mounted (production build).
+  /openapi.yaml:
+    get:
+      operationId: getOpenApiSpec
+      tags: [spec]
+      summary: Fetch the OpenAPI 3.1 HTTP spec
+      description: |
+        Returns the OpenAPI 3.1 YAML document that describes this HTTP API.
+        Useful for SDK generation, API documentation tooling, and contract
+        drift detection against a running server without cloning the repo.
+      responses:
+        "200":
+          description: OpenAPI 3.1 YAML document
+          content:
+            application/yaml:
+              schema:
+                type: string
+          headers:
+            Cache-Control:
+              schema:
+                type: string
+              description: "public, max-age=3600"
+  /asyncapi.yaml:
+    get:
+      operationId: getAsyncApiSpec
+      tags: [spec]
+      summary: Fetch the AsyncAPI 3.0 Socket.io signaling spec
+      description: |
+        Returns the AsyncAPI 3.0 YAML document that describes the
+        bidirectional Socket.io signaling channel mounted at
+        `/api/socket.io`. Useful for SDK generation, AsyncAPI Studio,
+        and contract drift detection.
+      responses:
+        "200":
+          description: AsyncAPI 3.0 YAML document
+          content:
+            application/yaml:
+              schema:
+                type: string
+          headers:
+            Cache-Control:
+              schema:
+                type: string
+              description: "public, max-age=3600"
+  /ice-servers:
+    get:
+      operationId: getIceServers
+      tags: [ice]
+      summary: Issue ephemeral STUN/TURN credentials
+      description: |
+        Returns an ICE server list suitable for `RTCPeerConnection`.
+
+        When TURN is configured (`TURN_URL` + `TURN_SECRET` env
+        vars), the response includes a TURN entry with
+        time-limited HMAC-SHA1 credentials per
+        [draft-uberti-rtcweb-turn-rest-00](https://datatracker.ietf.org/doc/html/draft-uberti-rtcweb-turn-rest-00),
+        an optional STUN entry (`STUN_URL`), the credential `ttl` in
+        seconds, and the absolute Unix `expiresAt` timestamp.
+
+        When TURN is not configured, returns Google's public STUN
+        servers and omits `ttl` / `expiresAt`. Self-hosters who
+        require strict relay-only behavior must configure TURN.
+
+        Rate-limited per source IP to 10 requests / 60 seconds.
+        Exceeding the limit returns 429 with body
+        `{ "error": "RATE_LIMITED" }`.
+      responses:
+        "200":
+          description: ICE server list
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/IceServersResponse"
+        "429":
+          description: Rate limit exceeded
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+components:
+  schemas:
+    HealthStatus:
+      type: object
+      properties:
+        status:
+          type: string
+      required:
+        - status
+    InvoiceRequest:
+      type: object
+      description: Optional body for `POST /paywall/invoice`. Omit to default to the `standard` tier.
+      properties:
+        tier:
+          type: string
+          enum: [standard, day]
+          description: |
+            Room lifetime tier. `standard` = 65 minutes / 1,000 sats,
+            `day` = 24 hours / 5,000 sats. Any other value is
+            rejected with HTTP 400 (no silent downgrade).
+    InvoiceResponse:
+      type: object
+      description: Newly created Lightning invoice and its payment hash.
+      properties:
+        invoice:
+          type: string
+          description: BOLT11 invoice string. The mock backend prefixes invoices with `lnbc...mock...` for easy identification.
+        paymentHash:
+          type: string
+          description: "Opaque payment hash. Use to poll `/paywall/status/{paymentHash}`."
+        amountSats:
+          type: integer
+          description: "Invoice amount in satoshis. 1,000 for `standard`, 5,000 for `day`."
+          minimum: 1
+        tier:
+          type: string
+          enum: [standard, day]
+          description: Tier that was actually invoiced (echoes the request body, or `standard` when omitted).
+      required:
+        - invoice
+        - paymentHash
+        - amountSats
+        - tier
+    PaymentStatus:
+      type: object
+      description: |
+        Result of polling for invoice settlement. When `paid` is `true`
+        the response also includes the newly minted JWT, the tier that
+        was paid for, the absolute expiry of the paid window, and a
+        one-time `recoveryCode` (4 BIP-39 words) that can be used
+        once via `POST /paywall/recover` to remint a fresh JWT for the
+        same window. The `recoveryCode` is only present on the **first**
+        poll-confirm; subsequent polls of the same hash return the
+        token without it.
+      properties:
+        paid:
+          type: boolean
+        token:
+          type: string
+          description: |
+            HS256 JWT, payload `{ "authorized": true, "tier": "standard" | "day" }`.
+            Valid for 1 hour (`standard`) or 24 hours (`day`), matching the room TTL.
+        tier:
+          type: string
+          enum: [standard, day]
+          description: Tier that was paid for. Present iff `paid` is `true`.
+        recoveryCode:
+          type: string
+          description: |
+            One-time 4-word BIP-39 recovery code (lowercase, single
+            spaces). Present only on the first `paid: true` response
+            for a given payment hash. Show this to the user once and
+            never persist it on the client.
+        expiresAt:
+          type: integer
+          description: Absolute expiry of the paid window, Unix milliseconds. Present iff `paid` is `true`.
+      required:
+        - paid
+    RecoverRequest:
+      type: object
+      description: Body for `POST /paywall/recover`.
+      properties:
+        code:
+          type: string
+          description: 4 BIP-39 words separated by single spaces. Case- and whitespace-insensitive on the wire.
+      required:
+        - code
+    RecoverResponse:
+      type: object
+      description: Result of redeeming a recovery code.
+      properties:
+        token:
+          type: string
+          description: Newly minted HS256 JWT. Lifetime is clamped to the remaining seconds of the original paid window.
+        tier:
+          type: string
+          enum: [standard, day]
+          description: Tier of the original paid window.
+        expiresAt:
+          type: integer
+          description: Absolute expiry of the paid window, Unix milliseconds. Same value as the original `PaymentStatus.expiresAt`.
+      required:
+        - token
+        - tier
+        - expiresAt
+    DevPaymentResult:
+      type: object
+      description: Result of the dev-only payment simulation.
+      properties:
+        ok:
+          type: boolean
+          description: True if the invoice was found and marked paid; false if the hash was unknown or already paid.
+      required:
+        - ok
+    IceServer:
+      type: object
+      description: A single ICE server entry as consumed by `RTCPeerConnection`.
+      properties:
+        urls:
+          type: string
+          description: STUN or TURN URL (e.g. `stun:stun.void.example:3478`, `turn:turn.example.com:3478?transport=udp`).
+        username:
+          type: string
+          description: TURN username — present only for TURN entries. Encodes the credential expiry timestamp (`<unix-expiry>:<random>`).
+        credential:
+          type: string
+          description: TURN credential — present only for TURN entries. Base64-encoded HMAC-SHA1 of the username, keyed by the shared TURN secret.
+      required:
+        - urls
+    IceServersResponse:
+      type: object
+      description: |
+        ICE configuration. `ttl` and `expiresAt` are only present
+        when TURN is configured; they describe the lifetime of the
+        TURN credentials inside `iceServers`.
+      properties:
+        iceServers:
+          type: array
+          items:
+            $ref: "#/components/schemas/IceServer"
+        ttl:
+          type: integer
+          description: Credential lifetime in seconds (clamped to [300, 86400]).
+          minimum: 300
+          maximum: 86400
+        expiresAt:
+          type: integer
+          description: Absolute expiry, Unix seconds.
+      required:
+        - iceServers
+    ErrorResponse:
+      type: object
+      description: Standard error envelope.
+      properties:
+        error:
+          type: string
+          description: Short, machine-readable error code or message.
+      required:
+        - error

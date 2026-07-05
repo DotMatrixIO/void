@@ -1,0 +1,1463 @@
+asyncapi: 3.0.0
+info:
+  title: VOID Signaling Channel
+  version: 0.1.0
+  description: |
+    AsyncAPI description of the bidirectional Socket.io signaling channel
+    served by the VOID API server.
+
+    The channel is mounted at `/api/socket.io` and carries every
+    room-management and WebRTC signaling event between clients and the
+    server. The server is a pure relay: it never inspects or stores
+    media and only relays opaque WebRTC signaling payloads (`relay-signal`).
+
+    Conventions used in this document:
+
+    - **Operations** are written from the **server's perspective**.
+      `action: receive` means the server receives an event sent by a
+      client (`socket.emit("create-room", ...)` on the client side).
+      `action: send` means the server emits an event to one or more
+      clients (`socket.emit("peer-joined", ...)` / `io.to(code).emit(...)`
+      on the server side).
+    - **Acknowledgement callbacks** are modelled in the operation's
+      `reply` block. On the wire these are Socket.io ack callbacks (the
+      last positional argument of `socket.emit(event, payload, ack)`),
+      not separate events. The `reply.address` field is therefore
+      `null` (no event name).
+    - **Error codes** are enumerated in the shared
+      `#/components/schemas/SignalingErrorCode` schema. Every ack
+      callback's `error` field draws from this enum.
+    - This document covers the public HTTP surface's sibling realtime
+      surface only. The HTTP surface is described in
+      [`./openapi.yaml`](./openapi.yaml).
+
+defaultContentType: application/json
+
+servers:
+  production:
+    host: void.example.com
+    pathname: /api/socket.io
+    protocol: wss
+    description: Production Socket.io endpoint over TLS.
+  local:
+    host: localhost:5000
+    pathname: /api/socket.io
+    protocol: ws
+    description: Local development Socket.io endpoint.
+
+channels:
+  # ---------- Client → Server (room lifecycle) ----------
+  createRoom:
+    address: create-room
+    messages:
+      CreateRoomRequest:
+        $ref: "#/components/messages/CreateRoomRequest"
+  joinRoom:
+    address: join-room
+    messages:
+      JoinRoomRequest:
+        $ref: "#/components/messages/JoinRoomRequest"
+  leaveRoom:
+    address: leave-room
+    messages:
+      LeaveRoomRequest:
+        $ref: "#/components/messages/LeaveRoomRequest"
+  destroyRoom:
+    address: destroy-room
+    messages:
+      DestroyRoomRequest:
+        $ref: "#/components/messages/DestroyRoomRequest"
+  burnRoom:
+    address: burn-room
+    messages:
+      BurnRoomRequest:
+        $ref: "#/components/messages/BurnRoomRequest"
+  extendRoom:
+    address: extend-room
+    messages:
+      ExtendRoomRequest:
+        $ref: "#/components/messages/ExtendRoomRequest"
+  lockRoom:
+    address: lock-room
+    messages:
+      LockRoomRequest:
+        $ref: "#/components/messages/LockRoomRequest"
+  unlockRoom:
+    address: unlock-room
+    messages:
+      UnlockRoomRequest:
+        $ref: "#/components/messages/UnlockRoomRequest"
+  setKnockMode:
+    address: set-knock-mode
+    messages:
+      SetKnockModeRequest:
+        $ref: "#/components/messages/SetKnockModeRequest"
+  approveKnock:
+    address: approve-knock
+    messages:
+      ApproveKnockRequest:
+        $ref: "#/components/messages/ApproveKnockRequest"
+  denyKnock:
+    address: deny-knock
+    messages:
+      DenyKnockRequest:
+        $ref: "#/components/messages/DenyKnockRequest"
+  cancelKnock:
+    address: cancel-knock
+    messages:
+      CancelKnockRequest:
+        $ref: "#/components/messages/CancelKnockRequest"
+  # ---------- Client → Server (signaling & screen share) ----------
+  relaySignalIn:
+    address: relay-signal
+    messages:
+      RelaySignalRequest:
+        $ref: "#/components/messages/RelaySignalRequest"
+  # Task #868: `peer-media-state` removed as a signaling channel. Peer
+  # camera/mic/voice-mask/onion state now travels peer-to-peer over the
+  # encrypted `void.media-state` RTCDataChannel (DTLS-over-SCTP), which is
+  # outside the AsyncAPI signaling surface. See docs/signaling-envelope-audit.md.
+  requestScreenShare:
+    address: request-screen-share
+    messages:
+      RequestScreenShareRequest:
+        $ref: "#/components/messages/RequestScreenShareRequest"
+  screenShareStarted:
+    address: screen-share-started
+    messages:
+      ScreenShareStartedRequest:
+        $ref: "#/components/messages/ScreenShareStartedRequest"
+  screenShareStopped:
+    address: screen-share-stopped
+    messages:
+      ScreenShareStoppedRequest:
+        $ref: "#/components/messages/ScreenShareStoppedRequest"
+
+  # ---------- Server → Client (peer roster) ----------
+  peerJoined:
+    address: peer-joined
+    messages:
+      PeerJoinedEvent:
+        $ref: "#/components/messages/PeerJoinedEvent"
+  peerLeft:
+    address: peer-left
+    messages:
+      PeerLeftEvent:
+        $ref: "#/components/messages/PeerLeftEvent"
+  # ---------- Server → Client (room state) ----------
+  roomLocked:
+    address: room-locked
+    messages:
+      RoomLockedEvent:
+        $ref: "#/components/messages/RoomLockedEvent"
+  roomUnlocked:
+    address: room-unlocked
+    messages:
+      RoomUnlockedEvent:
+        $ref: "#/components/messages/RoomUnlockedEvent"
+  roomExtended:
+    address: room-extended
+    messages:
+      RoomExtendedEvent:
+        $ref: "#/components/messages/RoomExtendedEvent"
+  roomExpired:
+    address: room-expired
+    messages:
+      RoomExpiredEvent:
+        $ref: "#/components/messages/RoomExpiredEvent"
+  roomDestroyed:
+    address: room-destroyed
+    messages:
+      RoomDestroyedEvent:
+        $ref: "#/components/messages/RoomDestroyedEvent"
+  serverShutdown:
+    address: server-shutdown
+    messages:
+      ServerShutdownEvent:
+        $ref: "#/components/messages/ServerShutdownEvent"
+  # ---------- Server → Client (knock flow) ----------
+  knockRequest:
+    address: knock-request
+    messages:
+      KnockRequestEvent:
+        $ref: "#/components/messages/KnockRequestEvent"
+  knockModeChanged:
+    address: knock-mode-changed
+    messages:
+      KnockModeChangedEvent:
+        $ref: "#/components/messages/KnockModeChangedEvent"
+  knockApproved:
+    address: knock-approved
+    messages:
+      KnockApprovedEvent:
+        $ref: "#/components/messages/KnockApprovedEvent"
+  knockDenied:
+    address: knock-denied
+    messages:
+      KnockDeniedEvent:
+        $ref: "#/components/messages/KnockDeniedEvent"
+  # ---------- Server → Client (signaling & screen share) ----------
+  relaySignalOut:
+    address: relay-signal
+    messages:
+      RelaySignalEvent:
+        $ref: "#/components/messages/RelaySignalEvent"
+  # Task #868: server-emitted `peer-media-state` removed — the server no
+  # longer relays media-state (now a peer-to-peer data channel).
+  screenShareGranted:
+    address: screen-share-granted
+    messages:
+      ScreenShareGrantedEvent:
+        $ref: "#/components/messages/ScreenShareGrantedEvent"
+  screenShareDenied:
+    address: screen-share-denied
+    messages:
+      ScreenShareDeniedEvent:
+        $ref: "#/components/messages/ScreenShareDeniedEvent"
+  screenShareState:
+    address: screen-share-state
+    messages:
+      ScreenShareStateEvent:
+        $ref: "#/components/messages/ScreenShareStateEvent"
+  # ---------- Client → Server (cooperative relay-only flip) ----------
+  requestRelayOnly:
+    address: request-relay-only
+    messages:
+      RequestRelayOnlyRequest:
+        $ref: "#/components/messages/RequestRelayOnlyRequest"
+  respondRelayOnlyRequest:
+    address: respond-relay-only-request
+    messages:
+      RespondRelayOnlyRequestRequest:
+        $ref: "#/components/messages/RespondRelayOnlyRequestRequest"
+  # ---------- Server → Client (cooperative relay-only flip) ----------
+  relayOnlyRequested:
+    address: relay-only-requested
+    messages:
+      RelayOnlyRequestedEvent:
+        $ref: "#/components/messages/RelayOnlyRequestedEvent"
+  relayOnlyRequestDeclined:
+    address: relay-only-request-declined
+    messages:
+      RelayOnlyRequestDeclinedEvent:
+        $ref: "#/components/messages/RelayOnlyRequestDeclinedEvent"
+  roomRelayModeEnabled:
+    address: room-relay-mode-enabled
+    messages:
+      RoomRelayModeEnabledEvent:
+        $ref: "#/components/messages/RoomRelayModeEnabledEvent"
+  # ---------- Server → Client (host presence) ----------
+  hostChanged:
+    address: host-changed
+    messages:
+      HostChangedEvent:
+        $ref: "#/components/messages/HostChangedEvent"
+
+operations:
+  # ---------- Receive: client → server ----------
+  receiveCreateRoom:
+    action: receive
+    channel:
+      $ref: "#/channels/createRoom"
+    summary: Client requests creation of a paid room.
+    description: |
+      Validated against the paywall JWT (`token`). Enforces
+      one-payment-one-room via the JWT's `paymentHash`. Rate-limited to
+      10/min per socket.
+    messages:
+      - $ref: "#/channels/createRoom/messages/CreateRoomRequest"
+    reply:
+      address:
+        location: "$message.payload#/_ack"
+        description: Ack callback (no event name).
+      messages:
+        - $ref: "#/components/messages/CreateRoomAck"
+  receiveJoinRoom:
+    action: receive
+    channel:
+      $ref: "#/channels/joinRoom"
+    summary: Client joins an existing room.
+    description: |
+      May trigger `knock-request` to the host if knock mode is on.
+      A joining socket may optionally carry a paywall JWT to claim host
+      on a host-less room (Task #171). Rate-limited to 10/min per socket
+      and 50/min per IP, with exponential backoff on consecutive
+      failures.
+    messages:
+      - $ref: "#/channels/joinRoom/messages/JoinRoomRequest"
+    reply:
+      address:
+        location: "$message.payload#/_ack"
+      messages:
+        - $ref: "#/components/messages/JoinRoomAck"
+  receiveLeaveRoom:
+    action: receive
+    channel:
+      $ref: "#/channels/leaveRoom"
+    summary: Client leaves a room (fire-and-forget).
+    description: |
+      No ack. The server broadcasts `peer-left` to the rest of the room
+      and may broadcast a fresh `screen-share-state` if the leaver was
+      sharing. The room itself persists for the rest of its paid TTL.
+    messages:
+      - $ref: "#/channels/leaveRoom/messages/LeaveRoomRequest"
+  receiveDestroyRoom:
+    action: receive
+    channel:
+      $ref: "#/channels/destroyRoom"
+    summary: Host tears down the room immediately.
+    description: |
+      Host-only. On success the server broadcasts `room-destroyed` to
+      every member (including knockers) and forces them to leave the
+      room.
+    messages:
+      - $ref: "#/channels/destroyRoom/messages/DestroyRoomRequest"
+    reply:
+      address:
+        location: "$message.payload#/_ack"
+      messages:
+        - $ref: "#/components/messages/DestroyRoomAck"
+  receiveBurnRoom:
+    action: receive
+    channel:
+      $ref: "#/channels/burnRoom"
+    summary: Any participant burns the room immediately.
+    description: |
+      Available to any current member of the room — NOT host-only.
+      Unlike `destroy-room` (a host moderation control), `burn-room` is
+      the BURN privacy panic primitive: when any participant burns, the
+      room must be destroyed for everyone so the phrase can no longer be
+      re-joined by anyone. On success the server broadcasts
+      `room-destroyed` to every member (including knockers) and forces
+      them to leave the room. The caller must present the `peerId` it
+      currently holds in the room (verified against the socket's
+      membership, same as `leave-room`).
+    messages:
+      - $ref: "#/channels/burnRoom/messages/BurnRoomRequest"
+    reply:
+      address:
+        location: "$message.payload#/_ack"
+      messages:
+        - $ref: "#/components/messages/BurnRoomAck"
+  receiveExtendRoom:
+    action: receive
+    channel:
+      $ref: "#/channels/extendRoom"
+    summary: Host extends a paid room with a fresh paid JWT.
+    description: |
+      Host-only, paid-tier-only. Tokens are single-use (replay-protected
+      via SHA-256 hash). Successful extension broadcasts `room-extended`
+      to every peer in the room. Rate-limited to 5/min per socket.
+    messages:
+      - $ref: "#/channels/extendRoom/messages/ExtendRoomRequest"
+    reply:
+      address:
+        location: "$message.payload#/_ack"
+      messages:
+        - $ref: "#/components/messages/ExtendRoomAck"
+  receiveLockRoom:
+    action: receive
+    channel:
+      $ref: "#/channels/lockRoom"
+    summary: Host locks the room against new joiners.
+    messages:
+      - $ref: "#/channels/lockRoom/messages/LockRoomRequest"
+    reply:
+      address:
+        location: "$message.payload#/_ack"
+      messages:
+        - $ref: "#/components/messages/SimpleAck"
+  receiveUnlockRoom:
+    action: receive
+    channel:
+      $ref: "#/channels/unlockRoom"
+    summary: Host unlocks the room.
+    messages:
+      - $ref: "#/channels/unlockRoom/messages/UnlockRoomRequest"
+    reply:
+      address:
+        location: "$message.payload#/_ack"
+      messages:
+        - $ref: "#/components/messages/SimpleAck"
+  receiveSetKnockMode:
+    action: receive
+    channel:
+      $ref: "#/channels/setKnockMode"
+    summary: Host enables / disables knock-to-enter mode.
+    messages:
+      - $ref: "#/channels/setKnockMode/messages/SetKnockModeRequest"
+    reply:
+      address:
+        location: "$message.payload#/_ack"
+      messages:
+        - $ref: "#/components/messages/SimpleAck"
+  receiveApproveKnock:
+    action: receive
+    channel:
+      $ref: "#/channels/approveKnock"
+    summary: Host approves a pending knock.
+    description: |
+      Moves the knocker into the room and emits `knock-approved` to the
+      knocker plus `peer-joined` to existing members.
+    messages:
+      - $ref: "#/channels/approveKnock/messages/ApproveKnockRequest"
+    reply:
+      address:
+        location: "$message.payload#/_ack"
+      messages:
+        - $ref: "#/components/messages/SimpleAck"
+  receiveDenyKnock:
+    action: receive
+    channel:
+      $ref: "#/channels/denyKnock"
+    summary: Host denies a pending knock.
+    description: |
+      Emits `knock-denied` to the knocker and disconnects their socket.
+    messages:
+      - $ref: "#/channels/denyKnock/messages/DenyKnockRequest"
+    reply:
+      address:
+        location: "$message.payload#/_ack"
+      messages:
+        - $ref: "#/components/messages/SimpleAck"
+  receiveCancelKnock:
+    action: receive
+    channel:
+      $ref: "#/channels/cancelKnock"
+    summary: Pending knocker cancels their own knock (fire-and-forget).
+    messages:
+      - $ref: "#/channels/cancelKnock/messages/CancelKnockRequest"
+  receiveRelaySignal:
+    action: receive
+    channel:
+      $ref: "#/channels/relaySignalIn"
+    summary: Client relays a WebRTC signaling payload to a specific peer.
+    description: |
+      Fire-and-forget. The server forwards to the target peer in the
+      same room as a server-emitted `relay-signal` event. Rate-limited
+      to 200 events / 10s per socket. The server never inspects
+      `payload`.
+    messages:
+      - $ref: "#/channels/relaySignalIn/messages/RelaySignalRequest"
+  receiveRequestScreenShare:
+    action: receive
+    channel:
+      $ref: "#/channels/requestScreenShare"
+    summary: Client reserves the single screen-share slot.
+    description: |
+      Reservation TTL is 12 seconds. On grant the server emits
+      `screen-share-granted` to the requester and broadcasts an updated
+      `screen-share-state` to the room. On denial the server emits
+      `screen-share-denied` with one of `SLOT_OCCUPIED` (another peer
+      is sharing) or `SLOT_RESERVED` (another peer is mid-reservation).
+      Rate-limited to 5/min per socket.
+
+      The grant ack carries a per-grant `nonce` (Task #303). The client
+      tracks the last-acted nonce and ignores a duplicate ack with the
+      same nonce so a retransmit or out-of-order delivery cannot
+      double-book the presenter slot by promoting the same grant twice.
+    messages:
+      - $ref: "#/channels/requestScreenShare/messages/RequestScreenShareRequest"
+    reply:
+      address:
+        location: "$message.payload#/_ack"
+      messages:
+        - $ref: "#/components/messages/RequestScreenShareAck"
+  receiveScreenShareStarted:
+    action: receive
+    channel:
+      $ref: "#/channels/screenShareStarted"
+    summary: Client confirms it began capturing the display stream.
+    description: |
+      Promotes the reservation to active and broadcasts a fresh
+      `screen-share-state` to the room.
+    messages:
+      - $ref: "#/channels/screenShareStarted/messages/ScreenShareStartedRequest"
+    reply:
+      address:
+        location: "$message.payload#/_ack"
+      messages:
+        - $ref: "#/components/messages/SimpleAck"
+  receiveScreenShareStopped:
+    action: receive
+    channel:
+      $ref: "#/channels/screenShareStopped"
+    summary: Client stops sharing (or releases an unused reservation).
+    description: |
+      Clears the active or reserved slot and broadcasts a fresh
+      `screen-share-state` to the room.
+    messages:
+      - $ref: "#/channels/screenShareStopped/messages/ScreenShareStoppedRequest"
+    reply:
+      address:
+        location: "$message.payload#/_ack"
+      messages:
+        - $ref: "#/components/messages/SimpleAck"
+  receiveRequestRelayOnly:
+    action: receive
+    channel:
+      $ref: "#/channels/requestRelayOnly"
+    summary: Any in-room peer asks the host to flip the room into relay-only mode.
+    description: |
+      Cooperative request flow (Task #106). If the requester is the
+      host, the room is flipped immediately and `room-relay-mode-enabled`
+      is broadcast. Otherwise the server forwards a `relay-only-requested`
+      event to the host. Rate-limited per socket. Possible ack errors
+      include `INVALID_CODE`, `RATE_LIMITED`, `NOT_IN_ROOM`, `NO_HOST`,
+      and `ROOM_EXPIRED`. The optional `alreadyEnabled` flag in the ack
+      is set when the room was already relay-only at request time.
+    messages:
+      - $ref: "#/channels/requestRelayOnly/messages/RequestRelayOnlyRequest"
+    reply:
+      address:
+        location: "$message.payload#/_ack"
+      messages:
+        - $ref: "#/components/messages/RequestRelayOnlyAck"
+  receiveRespondRelayOnlyRequest:
+    action: receive
+    channel:
+      $ref: "#/channels/respondRelayOnlyRequest"
+    summary: Host accepts or declines a `request-relay-only` from a peer.
+    description: |
+      Host-only. On `accept: true` the room flips to relay-only and
+      every member receives `room-relay-mode-enabled` (suppressed when
+      the room was already relay-only). On `accept: false` only the
+      requester receives `relay-only-request-declined`.
+    messages:
+      - $ref: "#/channels/respondRelayOnlyRequest/messages/RespondRelayOnlyRequestRequest"
+    reply:
+      address:
+        location: "$message.payload#/_ack"
+      messages:
+        - $ref: "#/components/messages/SimpleAck"
+
+  # ---------- Send: server → client ----------
+  sendPeerJoined:
+    action: send
+    channel:
+      $ref: "#/channels/peerJoined"
+    summary: A new peer joined the room.
+    messages:
+      - $ref: "#/channels/peerJoined/messages/PeerJoinedEvent"
+  sendPeerLeft:
+    action: send
+    channel:
+      $ref: "#/channels/peerLeft"
+    summary: A peer left (or disconnected from) the room.
+    messages:
+      - $ref: "#/channels/peerLeft/messages/PeerLeftEvent"
+  sendRoomLocked:
+    action: send
+    channel:
+      $ref: "#/channels/roomLocked"
+    summary: Room was locked against new joiners.
+    messages:
+      - $ref: "#/channels/roomLocked/messages/RoomLockedEvent"
+  sendRoomUnlocked:
+    action: send
+    channel:
+      $ref: "#/channels/roomUnlocked"
+    summary: Room was unlocked.
+    messages:
+      - $ref: "#/channels/roomUnlocked/messages/RoomUnlockedEvent"
+  sendRoomExtended:
+    action: send
+    channel:
+      $ref: "#/channels/roomExtended"
+    summary: A paid extension lengthened the room window.
+    messages:
+      - $ref: "#/channels/roomExtended/messages/RoomExtendedEvent"
+  sendRoomExpired:
+    action: send
+    channel:
+      $ref: "#/channels/roomExpired"
+    summary: Room reached its TTL and is being torn down.
+    description: |
+      Fired by the per-room expiry timer or the periodic GC sweep
+      (whichever runs first). Sockets are then forced to leave the
+      room and the `:knocking` waiting room.
+    messages:
+      - $ref: "#/channels/roomExpired/messages/RoomExpiredEvent"
+  sendRoomDestroyed:
+    action: send
+    channel:
+      $ref: "#/channels/roomDestroyed"
+    summary: Host destroyed the room before its TTL.
+    messages:
+      - $ref: "#/channels/roomDestroyed/messages/RoomDestroyedEvent"
+  sendServerShutdown:
+    action: send
+    channel:
+      $ref: "#/channels/serverShutdown"
+    summary: Signaling server is about to drain and exit (SIGTERM).
+    description: |
+      Broadcast to every connected socket immediately
+      before the SIGTERM drain begins. Clients render a non-blocking
+      banner and KEEP their established WebRTC peer connections
+      open — the call continues P2P after the signaling server is
+      gone. Re-emerges via Manager `reconnect` once the server is
+      back, at which point the banner is dismissed.
+    messages:
+      - $ref: "#/channels/serverShutdown/messages/ServerShutdownEvent"
+  sendKnockRequest:
+    action: send
+    channel:
+      $ref: "#/channels/knockRequest"
+    summary: A peer is knocking on a knock-mode room.
+    description: Sent only to the host (and any other in-room peer).
+    messages:
+      - $ref: "#/channels/knockRequest/messages/KnockRequestEvent"
+  sendKnockModeChanged:
+    action: send
+    channel:
+      $ref: "#/channels/knockModeChanged"
+    summary: Knock-to-enter mode was toggled by the host.
+    messages:
+      - $ref: "#/channels/knockModeChanged/messages/KnockModeChangedEvent"
+  sendKnockApproved:
+    action: send
+    channel:
+      $ref: "#/channels/knockApproved"
+    summary: Host approved a knocker; sent only to the knocker.
+    messages:
+      - $ref: "#/channels/knockApproved/messages/KnockApprovedEvent"
+  sendKnockDenied:
+    action: send
+    channel:
+      $ref: "#/channels/knockDenied"
+    summary: Host denied a knocker; sent only to the knocker. The server then disconnects the knocker's socket.
+    messages:
+      - $ref: "#/channels/knockDenied/messages/KnockDeniedEvent"
+  sendRelaySignal:
+    action: send
+    channel:
+      $ref: "#/channels/relaySignalOut"
+    summary: A peer relayed a WebRTC signaling payload to this socket.
+    description: Server-emitted counterpart of the client `relay-signal`.
+    messages:
+      - $ref: "#/channels/relaySignalOut/messages/RelaySignalEvent"
+  sendScreenShareGranted:
+    action: send
+    channel:
+      $ref: "#/channels/screenShareGranted"
+    summary: Reservation granted; this socket may begin getDisplayMedia().
+    messages:
+      - $ref: "#/channels/screenShareGranted/messages/ScreenShareGrantedEvent"
+  sendScreenShareDenied:
+    action: send
+    channel:
+      $ref: "#/channels/screenShareDenied"
+    summary: Reservation denied; another peer holds the slot or reservation.
+    messages:
+      - $ref: "#/channels/screenShareDenied/messages/ScreenShareDeniedEvent"
+  sendScreenShareState:
+    action: send
+    channel:
+      $ref: "#/channels/screenShareState"
+    summary: Authoritative screen-share state for the room.
+    description: |
+      Broadcast to every peer in the room whenever the active or
+      reserved screen-share slot changes (request, start, stop,
+      reservation timeout, departure of the sharer).
+    messages:
+      - $ref: "#/channels/screenShareState/messages/ScreenShareStateEvent"
+  sendRelayOnlyRequested:
+    action: send
+    channel:
+      $ref: "#/channels/relayOnlyRequested"
+    summary: A peer asked the host to flip the room into relay-only mode.
+    description: |
+      Sent only to the host's socket. The host answers via
+      `respond-relay-only-request`.
+    messages:
+      - $ref: "#/channels/relayOnlyRequested/messages/RelayOnlyRequestedEvent"
+  sendRelayOnlyRequestDeclined:
+    action: send
+    channel:
+      $ref: "#/channels/relayOnlyRequestDeclined"
+    summary: Host declined a `request-relay-only`; sent only to the requester.
+    messages:
+      - $ref: "#/channels/relayOnlyRequestDeclined/messages/RelayOnlyRequestDeclinedEvent"
+  sendRoomRelayModeEnabled:
+    action: send
+    channel:
+      $ref: "#/channels/roomRelayModeEnabled"
+    summary: Room was flipped into relay-only mode.
+    description: |
+      Broadcast to every peer in the room when the host accepts a
+      `request-relay-only` (or self-flips). Each client should
+      re-negotiate its peer connections under ICE transport policy
+      `relay`.
+    messages:
+      - $ref: "#/channels/roomRelayModeEnabled/messages/RoomRelayModeEnabledEvent"
+  sendHostChanged:
+    action: send
+    channel:
+      $ref: "#/channels/hostChanged"
+    summary: Host presence flipped (host left / a paying peer reclaimed host).
+    description: |
+      Broadcast to remaining in-room peers whenever the moderation slot
+      vacates (host disconnected or explicitly left) or fills again
+      (Task #171 host reclaim via paywall JWT). Drives the "HOST
+      OFFLINE — REJOIN PAUSED" UI pill on the void-client.
+    messages:
+      - $ref: "#/channels/hostChanged/messages/HostChangedEvent"
+
+components:
+  messages:
+    # ----- Inbound: client requests with ack -----
+    CreateRoomRequest:
+      name: CreateRoomRequest
+      title: create-room request
+      payload:
+        $ref: "#/components/schemas/CreateRoomRequestPayload"
+    CreateRoomAck:
+      name: CreateRoomAck
+      title: create-room ack callback
+      payload:
+        $ref: "#/components/schemas/CreateRoomAckPayload"
+    JoinRoomRequest:
+      name: JoinRoomRequest
+      title: join-room request
+      payload:
+        $ref: "#/components/schemas/JoinRoomRequestPayload"
+    JoinRoomAck:
+      name: JoinRoomAck
+      title: join-room ack callback
+      payload:
+        $ref: "#/components/schemas/JoinRoomAckPayload"
+    LeaveRoomRequest:
+      name: LeaveRoomRequest
+      title: leave-room request (no ack)
+      payload:
+        $ref: "#/components/schemas/LeaveRoomRequestPayload"
+    DestroyRoomRequest:
+      name: DestroyRoomRequest
+      title: destroy-room request
+      payload:
+        $ref: "#/components/schemas/DestroyRoomRequestPayload"
+    DestroyRoomAck:
+      name: DestroyRoomAck
+      title: destroy-room ack callback
+      payload:
+        $ref: "#/components/schemas/SimpleAckPayload"
+    BurnRoomRequest:
+      name: BurnRoomRequest
+      title: burn-room request
+      payload:
+        $ref: "#/components/schemas/BurnRoomRequestPayload"
+    BurnRoomAck:
+      name: BurnRoomAck
+      title: burn-room ack callback
+      payload:
+        $ref: "#/components/schemas/SimpleAckPayload"
+    ExtendRoomRequest:
+      name: ExtendRoomRequest
+      title: extend-room request
+      payload:
+        $ref: "#/components/schemas/ExtendRoomRequestPayload"
+    ExtendRoomAck:
+      name: ExtendRoomAck
+      title: extend-room ack callback
+      payload:
+        $ref: "#/components/schemas/ExtendRoomAckPayload"
+    LockRoomRequest:
+      name: LockRoomRequest
+      title: lock-room request
+      payload:
+        $ref: "#/components/schemas/RoomCodeOnlyPayload"
+    UnlockRoomRequest:
+      name: UnlockRoomRequest
+      title: unlock-room request
+      payload:
+        $ref: "#/components/schemas/RoomCodeOnlyPayload"
+    SetKnockModeRequest:
+      name: SetKnockModeRequest
+      title: set-knock-mode request
+      payload:
+        $ref: "#/components/schemas/SetKnockModeRequestPayload"
+    ApproveKnockRequest:
+      name: ApproveKnockRequest
+      title: approve-knock request
+      payload:
+        $ref: "#/components/schemas/CodeAndPeerPayload"
+    DenyKnockRequest:
+      name: DenyKnockRequest
+      title: deny-knock request
+      payload:
+        $ref: "#/components/schemas/CodeAndPeerPayload"
+    CancelKnockRequest:
+      name: CancelKnockRequest
+      title: cancel-knock request (no ack)
+      payload:
+        $ref: "#/components/schemas/RoomCodeOnlyPayload"
+    SimpleAck:
+      name: SimpleAck
+      title: Generic { success, error? } ack callback
+      payload:
+        $ref: "#/components/schemas/SimpleAckPayload"
+    RelaySignalRequest:
+      name: RelaySignalRequest
+      title: relay-signal client → server
+      payload:
+        $ref: "#/components/schemas/RelaySignalInPayload"
+    RequestScreenShareRequest:
+      name: RequestScreenShareRequest
+      title: request-screen-share request
+      payload:
+        $ref: "#/components/schemas/CodeAndPeerPayload"
+    RequestScreenShareAck:
+      name: RequestScreenShareAck
+      title: request-screen-share ack callback
+      payload:
+        $ref: "#/components/schemas/RequestScreenShareAckPayload"
+    ScreenShareStartedRequest:
+      name: ScreenShareStartedRequest
+      title: screen-share-started request
+      payload:
+        $ref: "#/components/schemas/CodeAndPeerPayload"
+    ScreenShareStoppedRequest:
+      name: ScreenShareStoppedRequest
+      title: screen-share-stopped request
+      payload:
+        $ref: "#/components/schemas/CodeAndPeerPayload"
+    RequestRelayOnlyRequest:
+      name: RequestRelayOnlyRequest
+      title: request-relay-only request
+      payload:
+        $ref: "#/components/schemas/RoomCodeOnlyPayload"
+    RequestRelayOnlyAck:
+      name: RequestRelayOnlyAck
+      title: request-relay-only ack callback
+      payload:
+        $ref: "#/components/schemas/RequestRelayOnlyAckPayload"
+    RespondRelayOnlyRequestRequest:
+      name: RespondRelayOnlyRequestRequest
+      title: respond-relay-only-request request
+      payload:
+        $ref: "#/components/schemas/RespondRelayOnlyRequestPayload"
+
+    # ----- Outbound: server-emitted events -----
+    PeerJoinedEvent:
+      name: PeerJoinedEvent
+      title: peer-joined broadcast
+      payload:
+        $ref: "#/components/schemas/PeerOnlyPayload"
+    PeerLeftEvent:
+      name: PeerLeftEvent
+      title: peer-left broadcast
+      payload:
+        $ref: "#/components/schemas/PeerOnlyPayload"
+    RoomLockedEvent:
+      name: RoomLockedEvent
+      title: room-locked broadcast
+      payload:
+        $ref: "#/components/schemas/EmptyObjectPayload"
+    RoomUnlockedEvent:
+      name: RoomUnlockedEvent
+      title: room-unlocked broadcast
+      payload:
+        $ref: "#/components/schemas/EmptyObjectPayload"
+    RoomExtendedEvent:
+      name: RoomExtendedEvent
+      title: room-extended broadcast
+      payload:
+        $ref: "#/components/schemas/RoomExtendedPayload"
+    RoomExpiredEvent:
+      name: RoomExpiredEvent
+      title: room-expired broadcast
+      summary: |
+        Emitted with no payload (Socket.io listener receives zero
+        arguments). Modelled here as an explicit no-arguments message
+        so generated clients do not require an empty `{}` body.
+      payload:
+        type: "null"
+    RoomDestroyedEvent:
+      name: RoomDestroyedEvent
+      title: room-destroyed broadcast
+      summary: |
+        Emitted with no payload (Socket.io listener receives zero
+        arguments). Modelled here as an explicit no-arguments message
+        so generated clients do not require an empty `{}` body.
+      payload:
+        type: "null"
+    ServerShutdownEvent:
+      name: ServerShutdownEvent
+      title: server-shutdown broadcast
+      summary: |
+        Emitted to every connected socket immediately
+        before the signaling server begins its SIGTERM drain. The
+        client surfaces a non-blocking banner ("SIGNALING SERVER
+        OFFLINE — YOUR CALL CONTINUES P2P.") and does NOT tear down
+        peer connections — established WebRTC sessions continue P2P.
+      payload:
+        type: object
+        required: [reason, drainMs]
+        additionalProperties: false
+        properties:
+          reason:
+            type: string
+            description: Human-readable cause (e.g. "SIGTERM", "SIGINT").
+          drainMs:
+            type: integer
+            minimum: 0
+            description: |
+              Milliseconds the server will wait for in-flight work
+              before exiting. Clients can use this to size any
+              client-side reconnect backoff.
+    KnockRequestEvent:
+      name: KnockRequestEvent
+      title: knock-request to in-room peers
+      payload:
+        $ref: "#/components/schemas/KnockRequestPayload"
+    KnockModeChangedEvent:
+      name: KnockModeChangedEvent
+      title: knock-mode-changed broadcast
+      payload:
+        $ref: "#/components/schemas/KnockModeChangedPayload"
+    KnockApprovedEvent:
+      name: KnockApprovedEvent
+      title: knock-approved (sent to the knocker)
+      payload:
+        $ref: "#/components/schemas/KnockApprovedPayload"
+    KnockDeniedEvent:
+      name: KnockDeniedEvent
+      title: knock-denied (sent to the knocker)
+      payload:
+        $ref: "#/components/schemas/RoomCodeOnlyPayload"
+    RelaySignalEvent:
+      name: RelaySignalEvent
+      title: relay-signal server → client
+      payload:
+        $ref: "#/components/schemas/RelaySignalOutPayload"
+    ScreenShareGrantedEvent:
+      name: ScreenShareGrantedEvent
+      title: screen-share-granted (to requester)
+      payload:
+        $ref: "#/components/schemas/ScreenShareGrantedPayload"
+    ScreenShareDeniedEvent:
+      name: ScreenShareDeniedEvent
+      title: screen-share-denied (to requester)
+      payload:
+        $ref: "#/components/schemas/ScreenShareDeniedPayload"
+    ScreenShareStateEvent:
+      name: ScreenShareStateEvent
+      title: screen-share-state broadcast
+      payload:
+        $ref: "#/components/schemas/ScreenShareStatePayload"
+    RelayOnlyRequestedEvent:
+      name: RelayOnlyRequestedEvent
+      title: relay-only-requested (sent only to the host)
+      payload:
+        $ref: "#/components/schemas/PeerOnlyOutPayload"
+    RelayOnlyRequestDeclinedEvent:
+      name: RelayOnlyRequestDeclinedEvent
+      title: relay-only-request-declined (sent only to the requester)
+      payload:
+        $ref: "#/components/schemas/EmptyObjectPayload"
+    RoomRelayModeEnabledEvent:
+      name: RoomRelayModeEnabledEvent
+      title: room-relay-mode-enabled broadcast
+      payload:
+        $ref: "#/components/schemas/EmptyObjectPayload"
+    HostChangedEvent:
+      name: HostChangedEvent
+      title: host-changed broadcast
+      payload:
+        $ref: "#/components/schemas/HostChangedPayload"
+
+  schemas:
+    # ----- Shared primitives -----
+    RoomCode:
+      type: string
+      pattern: "^[0-9a-f]{32}$"
+      description: 32-character lowercase hex room ID derived from the VOID Phrase.
+      example: "0123456789abcdef0123456789abcdef"
+    PeerId:
+      type: string
+      pattern: "^peer-[a-z0-9]{6}$"
+      description: Per-peer identifier minted by the client.
+      example: "peer-ab12cd"
+    RoomType:
+      type: string
+      enum: [human]
+      description: |
+        Room type. VOID is a single human-only product; `human` is the
+        only room type.
+    RoomTier:
+      type: string
+      enum: [standard, day]
+      description: |
+        Paid tier. `standard` = 65-minute room. `day` = 24-hour room.
+        Legacy `week` JWTs (pre-Task #115) are clamped to `day`.
+    EpochMs:
+      type: integer
+      description: Unix epoch in milliseconds.
+      minimum: 0
+    PaywallJwt:
+      type: string
+      description: |
+        Compact-serialized HS256 JWT minted by `POST /paywall/status/{paymentHash}`
+        (or `POST /paywall/recover`). Required for `create-room` and
+        `extend-room`; optional on `join-room` to claim host on a
+        host-less room.
+    SignalingErrorCode:
+      type: string
+      description: |
+        Shared enumeration of every error code the signaling channel may
+        emit (in ack callbacks, `screen-share-denied`, or
+        connection-time middleware errors). Clients should treat any
+        future, unknown value as a generic failure.
+      enum:
+        - INVALID_REQUEST
+        - INVALID_CODE
+        - INVALID_ROOM_ID
+        - INVALID_EXTENSION
+        - PAYMENT_REQUIRED
+        - TOKEN_ALREADY_USED
+        - ROOM_CAP_REACHED
+        - ROOM_EXISTS
+        - ROOM_NOT_FOUND
+        - ROOM_EXPIRED
+        - ROOM_LOCKED
+        - ROOM_FULL
+        - EXTENSION_CAPPED
+        - KNOCK_PENDING
+        - KNOCK_NOT_FOUND
+        - KNOCK_QUEUE_FULL
+        - NOT_HOST
+        - NOT_IN_ROOM
+        - NO_RESERVATION
+        - NOT_SHARING
+        - SLOT_OCCUPIED
+        - SLOT_RESERVED
+        - RATE_LIMITED
+        - TOO_MANY_CONNECTIONS
+
+    # ----- request-screen-share ack (Task #303) -----
+    RequestScreenShareAckPayload:
+      type: object
+      required: [success]
+      additionalProperties: false
+      properties:
+        success:
+          type: boolean
+        error:
+          $ref: "#/components/schemas/SignalingErrorCode"
+        nonce:
+          type: string
+          description: |
+            Per-grant idempotency nonce, present only on `success: true`.
+            The client tracks the last-acted nonce and ignores any
+            duplicate ack carrying the same value so a retransmit or
+            out-of-order delivery cannot promote the same grant twice
+            and double-book the presenter slot.
+
+    # ----- screen-share-granted server event (Task #303) -----
+    ScreenShareGrantedPayload:
+      type: object
+      required: [code, nonce]
+      additionalProperties: false
+      properties:
+        code:
+          $ref: "#/components/schemas/RoomCode"
+        nonce:
+          type: string
+          description: |
+            Per-grant idempotency nonce. Matches the `nonce` returned
+            on the `request-screen-share` ack for the same grant.
+
+    # ----- Generic ack -----
+    SimpleAckPayload:
+      type: object
+      required: [success]
+      additionalProperties: false
+      properties:
+        success:
+          type: boolean
+        error:
+          $ref: "#/components/schemas/SignalingErrorCode"
+
+    # ----- create-room -----
+    CreateRoomRequestPayload:
+      type: object
+      required: [roomId, token]
+      additionalProperties: false
+      properties:
+        roomId:
+          $ref: "#/components/schemas/RoomCode"
+        token:
+          $ref: "#/components/schemas/PaywallJwt"
+        relayOnly:
+          type: boolean
+          description: |
+            Force every peer connection in the room to use the TURN
+            relay (no host-candidate fallback).
+        roomType:
+          $ref: "#/components/schemas/RoomType"
+    CreateRoomAckPayload:
+      type: object
+      additionalProperties: false
+      properties:
+        success:
+          type: boolean
+        error:
+          $ref: "#/components/schemas/SignalingErrorCode"
+        relayOnly:
+          type: boolean
+        roomType:
+          $ref: "#/components/schemas/RoomType"
+        tier:
+          $ref: "#/components/schemas/RoomTier"
+        expiresAt:
+          oneOf:
+            - $ref: "#/components/schemas/EpochMs"
+            - type: "null"
+        serverNow:
+          $ref: "#/components/schemas/EpochMs"
+
+    # ----- join-room -----
+    JoinRoomRequestPayload:
+      type: object
+      required: [code, peerId]
+      additionalProperties: false
+      properties:
+        code:
+          $ref: "#/components/schemas/RoomCode"
+        peerId:
+          $ref: "#/components/schemas/PeerId"
+        token:
+          allOf:
+            - $ref: "#/components/schemas/PaywallJwt"
+          description: |
+            Optional. If present and valid, the joining socket may
+            claim host on a host-less room whose stored
+            `paymentHash` set contains the JWT's `paymentHash`.
+    JoinRoomAckPayload:
+      type: object
+      required: [success, peers]
+      additionalProperties: false
+      properties:
+        success:
+          type: boolean
+        error:
+          $ref: "#/components/schemas/SignalingErrorCode"
+        peers:
+          type: array
+          items:
+            $ref: "#/components/schemas/PeerId"
+          description: |
+            Peer IDs of every other socket already in the room at the
+            moment this socket was admitted. Excludes the joiner's
+            own peerId.
+        locked:
+          type: boolean
+        maxUsers:
+          type: integer
+          minimum: 1
+        knockPending:
+          type: boolean
+          description: |
+            Set when `error == "KNOCK_PENDING"`. Indicates the socket
+            has been added to the room's `:knocking` waiting room and
+            should now wait for `knock-approved` or `knock-denied`.
+        knockMode:
+          type: boolean
+        relayOnly:
+          type: boolean
+        roomType:
+          $ref: "#/components/schemas/RoomType"
+        tier:
+          oneOf:
+            - $ref: "#/components/schemas/RoomTier"
+            - type: "null"
+        isHost:
+          type: boolean
+        expiresAt:
+          oneOf:
+            - $ref: "#/components/schemas/EpochMs"
+            - type: "null"
+        serverNow:
+          $ref: "#/components/schemas/EpochMs"
+        screenSharePeerId:
+          oneOf:
+            - $ref: "#/components/schemas/PeerId"
+            - type: "null"
+        screenShareReservedByPeerId:
+          oneOf:
+            - $ref: "#/components/schemas/PeerId"
+            - type: "null"
+
+    # ----- leave-room -----
+    LeaveRoomRequestPayload:
+      type: object
+      required: [code, peerId]
+      additionalProperties: false
+      properties:
+        code:
+          $ref: "#/components/schemas/RoomCode"
+        peerId:
+          $ref: "#/components/schemas/PeerId"
+
+    # ----- destroy-room -----
+    DestroyRoomRequestPayload:
+      type: object
+      required: [code]
+      additionalProperties: false
+      properties:
+        code:
+          $ref: "#/components/schemas/RoomCode"
+
+    # ----- burn-room -----
+    BurnRoomRequestPayload:
+      type: object
+      required: [code, peerId]
+      additionalProperties: false
+      properties:
+        code:
+          $ref: "#/components/schemas/RoomCode"
+        peerId:
+          $ref: "#/components/schemas/PeerId"
+
+    # ----- extend-room -----
+    ExtendRoomRequestPayload:
+      type: object
+      required: [code, token]
+      additionalProperties: false
+      properties:
+        code:
+          $ref: "#/components/schemas/RoomCode"
+        token:
+          $ref: "#/components/schemas/PaywallJwt"
+    ExtendRoomAckPayload:
+      type: object
+      required: [success]
+      additionalProperties: false
+      properties:
+        success:
+          type: boolean
+        error:
+          $ref: "#/components/schemas/SignalingErrorCode"
+        expiresAt:
+          $ref: "#/components/schemas/EpochMs"
+        serverNow:
+          $ref: "#/components/schemas/EpochMs"
+        tier:
+          $ref: "#/components/schemas/RoomTier"
+
+    # ----- lock / unlock / cancel-knock -----
+    RoomCodeOnlyPayload:
+      type: object
+      required: [code]
+      additionalProperties: false
+      properties:
+        code:
+          $ref: "#/components/schemas/RoomCode"
+
+    # ----- set-knock-mode -----
+    SetKnockModeRequestPayload:
+      type: object
+      required: [code, enabled]
+      additionalProperties: false
+      properties:
+        code:
+          $ref: "#/components/schemas/RoomCode"
+        enabled:
+          type: boolean
+
+    # ----- approve-knock / deny-knock / screen-share family -----
+    CodeAndPeerPayload:
+      type: object
+      required: [code, peerId]
+      additionalProperties: false
+      properties:
+        code:
+          $ref: "#/components/schemas/RoomCode"
+        peerId:
+          $ref: "#/components/schemas/PeerId"
+
+    # ----- relay-signal -----
+    RelaySignalInPayload:
+      type: object
+      required: [code, toPeerId, fromPeerId, payload]
+      additionalProperties: false
+      properties:
+        code:
+          $ref: "#/components/schemas/RoomCode"
+        toPeerId:
+          $ref: "#/components/schemas/PeerId"
+        fromPeerId:
+          $ref: "#/components/schemas/PeerId"
+        payload:
+          description: |
+            Opaque WebRTC signaling payload (offer / answer / ICE
+            candidate / etc). The server never inspects this field.
+    RelaySignalOutPayload:
+      type: object
+      required: [fromPeerId, payload]
+      additionalProperties: false
+      properties:
+        fromPeerId:
+          $ref: "#/components/schemas/PeerId"
+        payload:
+          description: Opaque WebRTC signaling payload, forwarded as-is.
+
+    # ----- peer-media-state: REMOVED (Task #868) -----
+    # Peer media-state (camOff/micMuted/voiceMode/viaOnion) is no longer a
+    # signaling payload. It travels peer-to-peer over the encrypted
+    # `void.media-state` RTCDataChannel and is validated entirely on the
+    # client. The server no longer reads or relays it.
+
+    # ----- Outbound payloads -----
+    EmptyObjectPayload:
+      type: object
+      additionalProperties: false
+      description: |
+        Event whose wire payload is the empty object `{}`. Used for
+        `room-locked` / `room-unlocked`, which the server emits as
+        `emit(event, {})`. Distinct from `room-expired` /
+        `room-destroyed`, which are emitted with no argument at all
+        (`payload: { type: "null" }` on those messages).
+    PeerOnlyPayload:
+      type: object
+      required: [peerId]
+      additionalProperties: false
+      properties:
+        peerId:
+          $ref: "#/components/schemas/PeerId"
+    RoomExtendedPayload:
+      type: object
+      required: [expiresAt, serverNow, tier]
+      additionalProperties: false
+      properties:
+        expiresAt:
+          $ref: "#/components/schemas/EpochMs"
+        serverNow:
+          $ref: "#/components/schemas/EpochMs"
+        tier:
+          $ref: "#/components/schemas/RoomTier"
+    KnockRequestPayload:
+      type: object
+      required: [peerId, code]
+      additionalProperties: false
+      properties:
+        peerId:
+          $ref: "#/components/schemas/PeerId"
+        code:
+          $ref: "#/components/schemas/RoomCode"
+    KnockModeChangedPayload:
+      type: object
+      required: [enabled]
+      additionalProperties: false
+      properties:
+        enabled:
+          type: boolean
+    KnockApprovedPayload:
+      type: object
+      required: [code, peers]
+      additionalProperties: false
+      properties:
+        code:
+          $ref: "#/components/schemas/RoomCode"
+        peers:
+          type: array
+          items:
+            $ref: "#/components/schemas/PeerId"
+        relayOnly:
+          type: boolean
+        roomType:
+          $ref: "#/components/schemas/RoomType"
+        tier:
+          oneOf:
+            - $ref: "#/components/schemas/RoomTier"
+            - type: "null"
+        expiresAt:
+          oneOf:
+            - $ref: "#/components/schemas/EpochMs"
+            - type: "null"
+        serverNow:
+          $ref: "#/components/schemas/EpochMs"
+        screenSharePeerId:
+          oneOf:
+            - $ref: "#/components/schemas/PeerId"
+            - type: "null"
+        screenShareReservedByPeerId:
+          oneOf:
+            - $ref: "#/components/schemas/PeerId"
+            - type: "null"
+    ScreenShareDeniedPayload:
+      type: object
+      required: [code]
+      additionalProperties: false
+      properties:
+        code:
+          $ref: "#/components/schemas/RoomCode"
+        reason:
+          $ref: "#/components/schemas/SignalingErrorCode"
+          description: |
+            One of `SLOT_OCCUPIED` (another peer is actively sharing)
+            or `SLOT_RESERVED` (another peer is mid-reservation).
+            Other `SignalingErrorCode` values may appear if the room
+            state changed between request and response.
+    ScreenShareStatePayload:
+      type: object
+      required: [activeScreenSharePeerId, reservedByPeerId]
+      additionalProperties: false
+      properties:
+        activeScreenSharePeerId:
+          oneOf:
+            - $ref: "#/components/schemas/PeerId"
+            - type: "null"
+          description: |
+            Peer currently sharing their screen, or `null` if the slot
+            is unused.
+        reservedByPeerId:
+          oneOf:
+            - $ref: "#/components/schemas/PeerId"
+            - type: "null"
+          description: |
+            Peer that holds an unconfirmed reservation (12-second TTL),
+            or `null` if no reservation is pending.
+    HostChangedPayload:
+      type: object
+      required: [hostPresent, hostPeerId]
+      additionalProperties: false
+      properties:
+        hostPresent:
+          type: boolean
+        hostPeerId:
+          oneOf:
+            - $ref: "#/components/schemas/PeerId"
+            - type: "null"
+    PeerOnlyOutPayload:
+      type: object
+      required: [peerId]
+      additionalProperties: false
+      properties:
+        peerId:
+          $ref: "#/components/schemas/PeerId"
+    RequestRelayOnlyAckPayload:
+      type: object
+      additionalProperties: false
+      properties:
+        success:
+          type: boolean
+        error:
+          $ref: "#/components/schemas/SignalingErrorCode"
+        alreadyEnabled:
+          type: boolean
+          description: |
+            Set to `true` when the room was already in relay-only mode
+            at request time. The server skips the
+            `room-relay-mode-enabled` broadcast in that case.
+    RespondRelayOnlyRequestPayload:
+      type: object
+      required: [code, peerId, accept]
+      additionalProperties: false
+      properties:
+        code:
+          $ref: "#/components/schemas/RoomCode"
+        peerId:
+          $ref: "#/components/schemas/PeerId"
+        accept:
+          type: boolean
