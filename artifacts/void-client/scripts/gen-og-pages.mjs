@@ -55,6 +55,7 @@ import { existsSync } from "node:fs";
 import { resolve, dirname } from "node:path";
 import { fileURLToPath } from "node:url";
 import { OG_ROUTES, getRouteBySlug } from "./og-routes.mjs";
+import { originProblem } from "./originRules.mjs";
 
 const __dir = dirname(fileURLToPath(import.meta.url));
 const distDir = resolve(__dir, "..", "dist", "public");
@@ -98,37 +99,18 @@ const STRICT =
  * @returns {boolean} true if the candidate is valid.
  */
 function validateOrigin(candidate, sourceLabel) {
-  let parsed;
-  try {
-    parsed = new URL(candidate);
-  } catch {
-    const msg = `[gen-og-pages] Invalid ${sourceLabel} "${candidate}": not a valid URL. Expected e.g. https://void.example.com`;
-    if (STRICT) {
-      console.error(`[gen-og-pages] FATAL: ${msg} — refusing to emit malformed og:image/og:url.`);
-      process.exit(1);
-    }
-    console.warn(`${msg} — falling back to relative URLs.`);
-    return false;
+  // The acceptance rule (absolute http(s) URL, no path) lives in the shared
+  // originRules module so the CI preflight and this build-time guard can never
+  // disagree about which origins are valid.
+  const problem = originProblem(candidate);
+  if (problem === null) return true;
+  const msg = `[gen-og-pages] Invalid ${sourceLabel} ${problem}`;
+  if (STRICT) {
+    console.error(`[gen-og-pages] FATAL: ${msg} — refusing to emit malformed og:image/og:url.`);
+    process.exit(1);
   }
-  if (parsed.protocol !== "https:" && parsed.protocol !== "http:") {
-    const msg = `[gen-og-pages] Invalid ${sourceLabel} "${candidate}": scheme must be http or https, got "${parsed.protocol}". Use e.g. https://void.example.com`;
-    if (STRICT) {
-      console.error(`[gen-og-pages] FATAL: ${msg} — refusing to emit malformed og:image/og:url.`);
-      process.exit(1);
-    }
-    console.warn(`${msg} — falling back to relative URLs.`);
-    return false;
-  }
-  if (parsed.pathname !== "/") {
-    const msg = `[gen-og-pages] Invalid ${sourceLabel} "${candidate}": must be a root URL with no path, got pathname "${parsed.pathname}". Strip the path and use e.g. ${parsed.protocol}//${parsed.host}`;
-    if (STRICT) {
-      console.error(`[gen-og-pages] FATAL: ${msg} — refusing to emit malformed og:image/og:url.`);
-      process.exit(1);
-    }
-    console.warn(`${msg} — falling back to relative URLs.`);
-    return false;
-  }
-  return true;
+  console.warn(`${msg} — falling back to relative URLs.`);
+  return false;
 }
 
 /**

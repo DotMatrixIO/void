@@ -106,47 +106,23 @@ jobs:
     if: ${{ github.event.repository.fork == false }}
     timeout-minutes: 5
     steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+      - name: Set up Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version-file: .nvmrc
+      # The onion-host / PUBLIC_ORIGIN validation lives in a single shared
+      # script (scripts/preflight-build-vars.mjs) that both this job and the
+      # void-client-sri.yml preflight invoke, so the two can never drift. It
+      # reuses the same validators the build itself relies on (onionHost.ts,
+      # originRules.mjs). --experimental-strip-types lets it import the .ts
+      # validator on the .nvmrc Node version.
       - name: Assert VITE_VOID_ONION_HOST and PUBLIC_ORIGIN are set and valid
         env:
           VITE_VOID_ONION_HOST: ${{ vars.VITE_VOID_ONION_HOST }}
           PUBLIC_ORIGIN: ${{ vars.PUBLIC_ORIGIN }}
-        run: |
-          set -euo pipefail
-          fail=0
-          where="GitHub -> Settings -> Secrets and variables -> Actions -> Variables tab"
-
-          # VITE_VOID_ONION_HOST: the canonical Tor v3 .onion mirror host
-          # baked into the bundle. Must be a 56-char base32 [a-z2-7] label
-          # before ".onion" (mirrors onionHost.ts). Scheme/path are tolerated.
-          onion="${VITE_VOID_ONION_HOST:-}"
-          if [ -z "$onion" ]; then
-            echo "::error::Required repository variable VITE_VOID_ONION_HOST is not set. It is the canonical Tor v3 .onion mirror host baked into the production void-client bundle. Set it in ${where} to your deployment's <56-char-base32>.onion host, then re-run the release. (See README-selfhost.md §6e.)"
-            fail=1
-          else
-            host=$(printf '%s' "$onion" | sed -E 's#^https?://##I; s#/.*$##; s#\.+$##' | tr 'A-Z' 'a-z')
-            if ! printf '%s' "$host" | grep -Eq '(^|\.)[a-z2-7]{56}\.onion$'; then
-              echo "::error::Repository variable VITE_VOID_ONION_HOST='${onion}' is not a syntactically valid Tor v3 .onion host (expected a 56-character base32 [a-z2-7] label immediately before \".onion\"). Fix it in ${where}, then re-run the release."
-              fail=1
-            fi
-          fi
-
-          # PUBLIC_ORIGIN: the absolute origin baked into the OG pages by
-          # gen-og-pages.mjs. Must be an absolute root URL (http/https scheme,
-          # bare host, no path) — mirrors validateOrigin() in gen-og-pages.mjs.
-          origin="${PUBLIC_ORIGIN:-}"
-          if [ -z "$origin" ]; then
-            echo "::error::Required repository variable PUBLIC_ORIGIN is not set. It is the absolute origin baked into the social-card OG pages by gen-og-pages.mjs. Set it in ${where} to an absolute root URL (e.g. https://void.example.com or https://<56-char-base32>.onion), then re-run the release."
-            fail=1
-          elif ! printf '%s' "$origin" | grep -Eq '^https?://[^/]+/?$'; then
-            echo "::error::Repository variable PUBLIC_ORIGIN='${origin}' is not an absolute root URL. Expected an http(s) scheme and a bare host with no path, e.g. https://void.example.com. Fix it in ${where}, then re-run the release."
-            fail=1
-          fi
-
-          if [ "$fail" -ne 0 ]; then
-            echo "::error::Preflight failed: one or more required build variables are missing or malformed (see errors above). No build steps ran. These variables are baked into the released bundle bytes, and the NODE_ENV=production build fails closed without them by design."
-            exit 1
-          fi
-          echo "Preflight OK: VITE_VOID_ONION_HOST and PUBLIC_ORIGIN are set and well-formed."
+        run: node --experimental-strip-types scripts/preflight-build-vars.mjs
 
   # ---------------------------------------------------------------------
   # Job 1: build the released bundle, emit SHA256SUMS, sign it, attest it.
@@ -167,38 +143,10 @@ jobs:
       git_sha: ${{ steps.tag.outputs.git_sha }}
 
     steps:
-      - name: Preflight — required release build variables are set
-        # VITE_VOID_ONION_HOST and PUBLIC_ORIGIN are both baked into the
-        # production void-client bundle, and a NODE_ENV=production build fails
-        # CLOSED without them (onion-bake guard in vite.config.ts + gen-og-pages
-        # strict mode). That failure otherwise surfaces deep in the build with a
-        # cryptic exit, so assert both up front with an actionable message that
-        # names the exact repository variable and where to set it. Keep this
-        # block byte-identical with the same preflight in
-        # .github/workflows/void-client-sri.yml.
-        env:
-          VITE_VOID_ONION_HOST: ${{ vars.VITE_VOID_ONION_HOST }}
-          PUBLIC_ORIGIN: ${{ vars.PUBLIC_ORIGIN }}
-        run: |
-          set -euo pipefail
-          missing=0
-          if [ -z "${VITE_VOID_ONION_HOST:-}" ]; then
-            echo "::error::Repository variable VITE_VOID_ONION_HOST is not set. It is baked into the production bundle's Tor onion link and a NODE_ENV=production build fails closed without it. Set it to the deployment's <56-char-base32>.onion host."
-            missing=1
-          fi
-          if [ -z "${PUBLIC_ORIGIN:-}" ]; then
-            echo "::error::Repository variable PUBLIC_ORIGIN is not set. gen-og-pages bakes it into every social card's absolute og:url/og:image and a NODE_ENV=production build fails closed without it. Set it to the canonical origin, e.g. https://void.example.com."
-            missing=1
-          elif ! printf '%s' "$PUBLIC_ORIGIN" | grep -qiE '^https?://[^/]+/?$'; then
-            echo "::error::Repository variable PUBLIC_ORIGIN='${PUBLIC_ORIGIN}' must be an absolute http(s) origin with no path, e.g. https://void.example.com. gen-og-pages rejects anything else."
-            missing=1
-          fi
-          if [ "$missing" -ne 0 ]; then
-            echo "::error::Set the variable(s) above under: repository Settings -> Secrets and variables -> Actions -> Variables. These are public repository VARIABLES, not secrets."
-            exit 1
-          fi
-          echo "Preflight OK: VITE_VOID_ONION_HOST and PUBLIC_ORIGIN are set."
-
+      # The required-build-variable preflight runs once in the dedicated
+      # `preflight` job above (which this job `needs:`), using the shared
+      # scripts/preflight-build-vars.mjs so there is a single source of truth.
+      # No inline copy here — that job already gates this one.
       - name: Checkout repository
         uses: actions/checkout@v4
         with:
