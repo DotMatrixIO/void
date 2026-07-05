@@ -67,7 +67,7 @@ const ALLOWED_FS = new Set(["mkdirSync", "writeFileSync"]);
 for (const sym of importedFsSymbols) {
   assert(
     ALLOWED_FS.has(sym),
-    `mockup codegen imports only allowed fs symbols — "${sym}" is not allowed`,
+    `imported fs symbol "${sym}" is on the write-only allowlist`,
   );
 }
 assert(
