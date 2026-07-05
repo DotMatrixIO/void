@@ -128,3 +128,29 @@ export const LARGE_FILE_ALLOWLIST = [
   "artifacts/void-client/public/portraits/self-portrait-gold-ascii.png", // landing portrait asset
   "artifacts/mockup-sandbox/public/portraits/self-portrait02_1779993532975.png", // design-sandbox portrait
 ];
+
+// Tier 4: TRACKED-FILE-COUNT FLOOR — the wipe backstop. The tiers above all
+// guard the *shape* of the tree (which entries ship, how big they are); none of
+// them notices the tree getting *emptied*. A catastrophic deletion — the exact
+// failure that happened here, when an unconditional `git add -A` auto-commit
+// captured an already-emptied working tree (~970 tracked files → a handful) —
+// passes every check above except by luck (the STALE checks only fire for
+// entries the wipe happened to leave named in the manifest). This floor makes a
+// wipe a LOUD, DETERMINISTIC failure: source mode fails if the total tracked
+// file count drops below MIN_TRACKED_FILES.
+//
+// WHY A FLOOR (not a live baseline/delta): a running "expected count" would have
+// to be bumped on every add/remove and would drift constantly — fragile, noisy,
+// and it would train reviewers to rubber-stamp the bump (defeating the guard). A
+// fixed floor set well below the real count needs no maintenance and only ever
+// moves for a genuine, reviewed reason. It is deliberately blunt: it catches the
+// catastrophic case (tree collapses toward zero), not small legitimate churn.
+//
+// The value is set far below the current tracked count (~970) but far above any
+// plausible legitimate floor for this repo, leaving generous headroom for normal
+// deletions while still tripping instantly on a wipe. LOWERING THIS IS A
+// DELIBERATE, REVIEWED ACT — same friction philosophy as LARGE_FILE_ALLOWLIST:
+// if a legitimate change really drops the tree below the floor, the reviewer
+// lowers the number on purpose, in the same change, with a reason. It must never
+// be lowered reflexively just to make a red check go green.
+export const MIN_TRACKED_FILES = 800;

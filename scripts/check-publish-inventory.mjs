@@ -31,7 +31,13 @@
 // grep), not here. See docs/pre-publish-scrub-2026-06.md.
 
 import { execFileSync } from "node:child_process";
-import { existsSync, readdirSync, readFileSync, statSync } from "node:fs";
+import {
+  existsSync,
+  readdirSync,
+  readFileSync,
+  realpathSync,
+  statSync,
+} from "node:fs";
 import { join, dirname, relative, sep } from "node:path";
 import { fileURLToPath } from "node:url";
 
@@ -41,6 +47,7 @@ import {
   NESTED_STRIP,
   LARGE_FILE_THRESHOLD_BYTES,
   LARGE_FILE_ALLOWLIST,
+  MIN_TRACKED_FILES,
 } from "./publish-inventory-manifest.mjs";
 
 const REPO_ROOT = join(dirname(fileURLToPath(import.meta.url)), "..");
@@ -167,8 +174,36 @@ function fail(problems) {
   process.exit(1);
 }
 
+// Pure floor check (exported for unit testing without invoking the CLI). Returns
+// an actionable problem string when the tracked-file count has fallen below the
+// floor, or null when it is at/above the floor. Kept as its own function so a
+// test can exercise the wipe-detection message directly — the real source-mode
+// path can only be driven against the actual checkout (git ls-files runs against
+// REPO_ROOT), so a synthetic below-floor tree cannot be simulated in-process.
+export function fileCountFloorProblem(count, floor = MIN_TRACKED_FILES) {
+  if (count >= floor) return null;
+  return (
+    `FILE-COUNT-FLOOR: only ${count} tracked file(s), below the floor of ` +
+    `${floor}. This almost always means the working tree was wiped and an ` +
+    `unconditional auto-commit captured the emptied tree — the exact failure ` +
+    `this guard exists to catch. RECOVER VIA GIT (git restore / git checkout ` +
+    `from a healthy checkpoint), never a cp restore (cp leaves files untracked ` +
+    `and breaks the index). If this drop is legitimate, lower MIN_TRACKED_FILES ` +
+    `in scripts/publish-inventory-manifest.mjs deliberately, in this same ` +
+    `change, with a reason — do not lower it just to make this check pass.`
+  );
+}
+
 function runSourceMode() {
   const paths = trackedPaths();
+
+  // (0) FLOOR: fail loudly and EARLY on a catastrophic drop in the tracked-file
+  //     count. This runs before the classification checks below because a wipe
+  //     would otherwise bury the real signal under a STALE error for every
+  //     now-missing manifest entry. One clear FILE-COUNT-FLOOR beats 40 STALEs.
+  const floorProblem = fileCountFloorProblem(paths.length);
+  if (floorProblem) fail([floorProblem]);
+
   const tracked = trackedTopLevel(paths);
   const problems = manifestConfigProblems();
 
@@ -336,14 +371,33 @@ function runSnapshotMode(dir) {
   );
 }
 
-const args = process.argv.slice(2);
-const snapIdx = args.indexOf("--snapshot");
-if (snapIdx !== -1) {
-  const dir = args[snapIdx + 1];
-  if (!dir || dir.startsWith("--")) {
-    fail([`--snapshot requires a directory argument, e.g. --snapshot "$PUB".`]);
+// Only dispatch the CLI when this file is the process entry point. When a test
+// imports it (to unit-test fileCountFloorProblem), we must NOT run a mode.
+// Fail SAFE: if entry resolution is uncertain, still run — the whole point of
+// this guard is that it must not silently no-op when invoked directly.
+function invokedDirectly() {
+  const entry = process.argv[1];
+  if (!entry) return false;
+  const self = fileURLToPath(import.meta.url);
+  try {
+    return realpathSync(entry) === realpathSync(self);
+  } catch {
+    return entry === self;
   }
-  runSnapshotMode(dir);
-} else {
-  runSourceMode();
+}
+
+if (invokedDirectly()) {
+  const args = process.argv.slice(2);
+  const snapIdx = args.indexOf("--snapshot");
+  if (snapIdx !== -1) {
+    const dir = args[snapIdx + 1];
+    if (!dir || dir.startsWith("--")) {
+      fail([
+        `--snapshot requires a directory argument, e.g. --snapshot "$PUB".`,
+      ]);
+    }
+    runSnapshotMode(dir);
+  } else {
+    runSourceMode();
+  }
 }

@@ -559,3 +559,33 @@ what the human might miss.
 - Confirm the public repo's default branch is `main` and that GitHub private
   vulnerability reporting is enabled (the `SECURITY.md` launch gate).
 - Keep the private-history remote access-restricted to the maintainer.
+
+---
+
+## 6. Recovery — if the working tree is wiped (restore via git, never `cp`)
+
+A full-tree wipe once reached a commit here: an unconditional `git add -A`
+auto-commit captured an already-emptied working tree, deleting ~970 tracked
+files in a single commit. The tracked-file-count floor
+(`MIN_TRACKED_FILES` in `scripts/publish-inventory-manifest.mjs`, enforced by
+`check-publish-inventory.mjs` in source mode) now turns that into a loud,
+deterministic failure — but if a wipe has already landed on disk, recover it
+**with git, never with `cp`**:
+
+```sh
+# Restore the whole tree from a healthy commit/checkpoint (worktree + index).
+git restore --source=<healthy-commit> --staged --worktree -- .
+#   or, equivalently, check the tree out of a known-good ref:
+git checkout <healthy-commit> -- .
+git status        # confirm the files are TRACKED again and the tree is clean
+```
+
+**Why not `cp`.** Copying files back from a backup dir (`cp -r ../good/. .`)
+puts the bytes on disk but leaves every restored file **untracked** and the
+index still recording the deletions — so the very next `git add -A` auto-commit
+re-commits the wipe *plus* a pile of "new" untracked files, compounding the
+mess. That is the exact secondary damage a `cp` restore caused here. `git
+restore` / `git checkout` fix the worktree **and** the index together, so the
+tree returns to a genuinely tracked, clean state. After recovery, run
+`pnpm --filter @workspace/scripts run check:publish-inventory` and confirm the
+file count is back above the floor.

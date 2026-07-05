@@ -9,6 +9,7 @@
     "check:publish-boundary": "node ./check-publish-boundary.mjs",
     "check:publish-inventory": "node ./check-publish-inventory.mjs",
     "check:wire-protocol-name": "node ./check-wire-protocol-name.mjs",
+    "test:mockup-codegen-safe": "node ./check-mockup-codegen-safe.test.mjs",
     "test:preflight-build-vars": "node --experimental-strip-types ./preflight-build-vars.test.mjs",
     "test:publish-inventory": "node ./check-publish-inventory.test.mjs",
     "typecheck": "tsc -p tsconfig.json --noEmit"

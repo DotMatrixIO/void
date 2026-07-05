@@ -28,7 +28,9 @@ import {
   NESTED_STRIP,
   LARGE_FILE_THRESHOLD_BYTES,
   LARGE_FILE_ALLOWLIST,
+  MIN_TRACKED_FILES,
 } from "./publish-inventory-manifest.mjs";
+import { fileCountFloorProblem } from "./check-publish-inventory.mjs";
 
 const __dirname = dirname(fileURLToPath(import.meta.url));
 const CHECKER = join(__dirname, "check-publish-inventory.mjs");
@@ -209,6 +211,79 @@ withSnapshot(
     assert(ok, "a file exactly at the threshold passes (ceiling is > not >=)");
   },
 );
+
+// --- 7. Tracked-file-count FLOOR (the wipe backstop, source mode). ---------
+// The floor guards against a wiped tree. The real source-mode path lists tracked
+// files via `git ls-files` against the actual checkout, so a synthetic
+// below-floor tree cannot be built in-process; instead we (a) unit-test the pure
+// fileCountFloorProblem helper for the below/at/above cases and their message,
+// and (b) run the CLI as a subprocess in source mode against the real repo to
+// prove the guard fires when invoked directly and the healthy tree passes.
+
+// 7a. Below the floor FAILS with an actionable FILE-COUNT-FLOOR message.
+{
+  const belowProblem = fileCountFloorProblem(MIN_TRACKED_FILES - 1);
+  assert(
+    belowProblem !== null,
+    "a count below the floor returns a problem (not null)",
+  );
+  assert(
+    typeof belowProblem === "string" &&
+      belowProblem.includes("FILE-COUNT-FLOOR"),
+    "below-floor problem names FILE-COUNT-FLOOR",
+  );
+  assert(
+    belowProblem.includes(String(MIN_TRACKED_FILES)) &&
+      belowProblem.includes(String(MIN_TRACKED_FILES - 1)),
+    "below-floor problem names both the observed count and the floor",
+  );
+  assert(
+    /git restore|git checkout/.test(belowProblem) &&
+      belowProblem.includes("cp"),
+    "below-floor problem tells the operator to recover via git, not cp",
+  );
+}
+
+// 7b. A catastrophic wipe (single-digit count) FAILS.
+assert(
+  fileCountFloorProblem(3) !== null,
+  "a wiped tree (3 files) is below the floor and fails",
+);
+
+// 7c. Exactly AT the floor PASSES (floor is inclusive: count >= floor is OK).
+assert(
+  fileCountFloorProblem(MIN_TRACKED_FILES) === null,
+  "a count exactly at the floor passes (>= floor is OK)",
+);
+
+// 7d. Above the floor PASSES.
+assert(
+  fileCountFloorProblem(MIN_TRACKED_FILES + 500) === null,
+  "a count above the floor passes",
+);
+
+// 7e. The CLI, run directly in source mode against the real repo, PASSES and
+//     prints the OK (source) line — proving the invoked-directly dispatch still
+//     fires (a regressed main-guard would silently no-op instead of running).
+{
+  let ok = false;
+  let output = "";
+  try {
+    output = execFileSync("node", [CHECKER], {
+      cwd: join(__dirname, ".."),
+      encoding: "utf8",
+      stdio: ["ignore", "pipe", "pipe"],
+    });
+    ok = true;
+  } catch (err) {
+    output = `${err.stdout ?? ""}${err.stderr ?? ""}`;
+  }
+  assert(ok, "source mode against the real (healthy) tree passes");
+  assert(
+    output.includes("OK (source)"),
+    "the CLI runs when invoked directly and prints OK (source)",
+  );
+}
 
 if (failures > 0) {
   process.stderr.write(`\n${failures} assertion(s) failed.\n`);
