@@ -89,10 +89,71 @@ env:
 
 jobs:
   # ---------------------------------------------------------------------
+  # Job 0: preflight — assert the required build VARIABLES are set and
+  # well-formed BEFORE any build step runs. Both VITE_VOID_ONION_HOST and
+  # PUBLIC_ORIGIN are baked into the production bundle bytes; if either is
+  # unset the NODE_ENV=production build correctly fails closed, but that
+  # failure surfaces deep inside the onion-bake guard (onionHost.ts, wired in
+  # vite.config.ts) or gen-og-pages.mjs several steps later, with a cryptic
+  # exit. This job turns "you forgot to set PUBLIC_ORIGIN" into a fast,
+  # self-explanatory failure. build-and-sign `needs:` this job, and the
+  # reproducibility jobs `needs:` build-and-sign, so the whole pipeline gates
+  # on the preflight.
+  preflight:
+    name: Preflight (required build variables)
+    runs-on: ubuntu-latest
+    # Canonical-repo only, matching build-and-sign so forks don't run it.
+    if: ${{ github.event.repository.fork == false }}
+    timeout-minutes: 5
+    steps:
+      - name: Assert VITE_VOID_ONION_HOST and PUBLIC_ORIGIN are set and valid
+        env:
+          VITE_VOID_ONION_HOST: ${{ vars.VITE_VOID_ONION_HOST }}
+          PUBLIC_ORIGIN: ${{ vars.PUBLIC_ORIGIN }}
+        run: |
+          set -euo pipefail
+          fail=0
+          where="GitHub -> Settings -> Secrets and variables -> Actions -> Variables tab"
+
+          # VITE_VOID_ONION_HOST: the canonical Tor v3 .onion mirror host
+          # baked into the bundle. Must be a 56-char base32 [a-z2-7] label
+          # before ".onion" (mirrors onionHost.ts). Scheme/path are tolerated.
+          onion="${VITE_VOID_ONION_HOST:-}"
+          if [ -z "$onion" ]; then
+            echo "::error::Required repository variable VITE_VOID_ONION_HOST is not set. It is the canonical Tor v3 .onion mirror host baked into the production void-client bundle. Set it in ${where} to your deployment's <56-char-base32>.onion host, then re-run the release. (See README-selfhost.md §6e.)"
+            fail=1
+          else
+            host=$(printf '%s' "$onion" | sed -E 's#^https?://##I; s#/.*$##; s#\.+$##' | tr 'A-Z' 'a-z')
+            if ! printf '%s' "$host" | grep -Eq '(^|\.)[a-z2-7]{56}\.onion$'; then
+              echo "::error::Repository variable VITE_VOID_ONION_HOST='${onion}' is not a syntactically valid Tor v3 .onion host (expected a 56-character base32 [a-z2-7] label immediately before \".onion\"). Fix it in ${where}, then re-run the release."
+              fail=1
+            fi
+          fi
+
+          # PUBLIC_ORIGIN: the absolute origin baked into the OG pages by
+          # gen-og-pages.mjs. Must be an absolute root URL (http/https scheme,
+          # bare host, no path) — mirrors validateOrigin() in gen-og-pages.mjs.
+          origin="${PUBLIC_ORIGIN:-}"
+          if [ -z "$origin" ]; then
+            echo "::error::Required repository variable PUBLIC_ORIGIN is not set. It is the absolute origin baked into the social-card OG pages by gen-og-pages.mjs. Set it in ${where} to an absolute root URL (e.g. https://void.example.com or https://<56-char-base32>.onion), then re-run the release."
+            fail=1
+          elif ! printf '%s' "$origin" | grep -Eq '^https?://[^/]+/?$'; then
+            echo "::error::Repository variable PUBLIC_ORIGIN='${origin}' is not an absolute root URL. Expected an http(s) scheme and a bare host with no path, e.g. https://void.example.com. Fix it in ${where}, then re-run the release."
+            fail=1
+          fi
+
+          if [ "$fail" -ne 0 ]; then
+            echo "::error::Preflight failed: one or more required build variables are missing or malformed (see errors above). No build steps ran. These variables are baked into the released bundle bytes, and the NODE_ENV=production build fails closed without them by design."
+            exit 1
+          fi
+          echo "Preflight OK: VITE_VOID_ONION_HOST and PUBLIC_ORIGIN are set and well-formed."
+
+  # ---------------------------------------------------------------------
   # Job 1: build the released bundle, emit SHA256SUMS, sign it, attest it.
   # ---------------------------------------------------------------------
   build-and-sign:
     name: Build, hash, sign
+    needs: preflight
     runs-on: ubuntu-latest
     # Canonical-repo only. Forks inherit this workflow but must not run the
     # release pipeline (cosign keyless signing, SLSA provenance, release-asset

@@ -90,6 +90,47 @@ jobs:
       - name: Install dependencies (frozen lockfile)
         run: pnpm install --frozen-lockfile --prefer-offline
 
+      - name: Preflight — required build variables set and valid
+        # Same guard as release.yml. A NODE_ENV=production build fails closed
+        # if VITE_VOID_ONION_HOST (onion-bake guard, vite.config.ts) or
+        # PUBLIC_ORIGIN (gen-og-pages.mjs) is unset, but that failure surfaces
+        # deep inside the build. Assert them up front with an actionable
+        # remediation message so a forgotten repo variable is obvious.
+        env:
+          VITE_VOID_ONION_HOST: ${{ vars.VITE_VOID_ONION_HOST }}
+          PUBLIC_ORIGIN: ${{ vars.PUBLIC_ORIGIN }}
+        run: |
+          set -euo pipefail
+          fail=0
+          where="GitHub -> Settings -> Secrets and variables -> Actions -> Variables tab"
+
+          onion="${VITE_VOID_ONION_HOST:-}"
+          if [ -z "$onion" ]; then
+            echo "::error::Required repository variable VITE_VOID_ONION_HOST is not set. It is the canonical Tor v3 .onion mirror host baked into the production void-client bundle. Set it in ${where} to your deployment's <56-char-base32>.onion host, then re-run. (See README-selfhost.md §6e.)"
+            fail=1
+          else
+            host=$(printf '%s' "$onion" | sed -E 's#^https?://##I; s#/.*$##; s#\.+$##' | tr 'A-Z' 'a-z')
+            if ! printf '%s' "$host" | grep -Eq '(^|\.)[a-z2-7]{56}\.onion$'; then
+              echo "::error::Repository variable VITE_VOID_ONION_HOST='${onion}' is not a syntactically valid Tor v3 .onion host (expected a 56-character base32 [a-z2-7] label immediately before \".onion\"). Fix it in ${where}, then re-run."
+              fail=1
+            fi
+          fi
+
+          origin="${PUBLIC_ORIGIN:-}"
+          if [ -z "$origin" ]; then
+            echo "::error::Required repository variable PUBLIC_ORIGIN is not set. It is the absolute origin baked into the social-card OG pages by gen-og-pages.mjs. Set it in ${where} to an absolute root URL (e.g. https://void.example.com or https://<56-char-base32>.onion), then re-run."
+            fail=1
+          elif ! printf '%s' "$origin" | grep -Eq '^https?://[^/]+/?$'; then
+            echo "::error::Repository variable PUBLIC_ORIGIN='${origin}' is not an absolute root URL. Expected an http(s) scheme and a bare host with no path, e.g. https://void.example.com. Fix it in ${where}, then re-run."
+            fail=1
+          fi
+
+          if [ "$fail" -ne 0 ]; then
+            echo "::error::Preflight failed: one or more required build variables are missing or malformed (see errors above). No build steps ran. The NODE_ENV=production build fails closed without them by design."
+            exit 1
+          fi
+          echo "Preflight OK: VITE_VOID_ONION_HOST and PUBLIC_ORIGIN are set and well-formed."
+
       - name: Build void-client (production)
         # PORT and BASE_PATH are required at vite.config.ts load time.
         # Values match the production Dockerfile; keep them in sync if
