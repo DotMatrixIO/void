@@ -540,6 +540,80 @@ networks:
 
 After bring-up, confirm the effective-config log shows the LNbits backend and your raised timeout (§4f), and that `POST /api/paywall/invoice` returns a real `lnbc…` invoice string.
 
+#### Reaching LNbits over Tailscale (Start9 / StartOS)
+
+If your LNbits runs on a Start9 (StartOS) box and you connect the two machines with [Tailscale](https://tailscale.com), you can dial it over the tailnet instead of running the Tor bridge above. It is simpler and faster — no `socat`, no Tor SOCKS hop, no bridge-gateway juggling — but StartOS's networking model has three sharp edges that make the "obvious" `LNBITS_URL` values fail from inside the container. Read this before you copy anything.
+
+**StartOS does not expose a plain `host:port`.** A Start9 box runs a single reverse proxy that routes **by hostname (SNI / `Host` header) on HTTPS port 443**, not by per-service ports. Each service is addressed by a name:
+
+- **LAN:** an mDNS name like `https://lnbits.local` on 443, with a certificate signed by StartOS's **own private certificate authority**.
+- **Remote:** a Tor `.onion` (plain HTTP *inside* the onion — Tor itself provides the encryption and authentication, which is why nothing needs a CA there).
+
+Over Tailscale you reach the box at its tailnet IP (`100.x.y.z`), but you must still present the **service hostname** so the proxy routes to LNbits and the TLS certificate matches. That is where the three edges come from — hitting `https://100.x.y.z` directly clears none of them:
+
+1. **Name resolution.** The container uses Docker's resolver, which resolves *neither* mDNS `.local` *nor* Tailscale MagicDNS `*.ts.net`. So even though the name works from your laptop, it is unresolvable inside the container.
+2. **Hostname / SNI routing.** `https://100.x.y.z` sends the wrong (or empty) `Host`/SNI, so the StartOS proxy will not route to LNbits and the certificate will not match its subject. You must use `LNBITS_URL=https://<hostname>` so the resolved name, the SNI, the `Host` header, and the certificate subject all agree.
+3. **Certificate trust.** A StartOS-CA certificate is not signed by any public root, so Node's `fetch` (which the LNbits adapter uses) rejects the handshake. You must give Node the StartOS root CA.
+
+**Find your working URL first.** From another device already on the tailnet (not the Start9 itself), open the URL that loads the LNbits UI and note two things: the exact hostname, and whether the browser shows the certificate as trusted. That answer picks one of the two cases below.
+
+**Case A — a `.local` hostname with a StartOS-CA certificate (the browser warns / you had to trust it manually).** You need to pin the name to the tailnet IP *and* mount the StartOS root CA. Everything lives in a `docker-compose.override.yml`, which Compose merges automatically so the tracked `docker-compose.yml` stays clean for `git pull` (§8):
+
+```yaml
+# docker-compose.override.yml  — local only, do not commit
+services:
+  void:
+    extra_hosts:
+      - "lnbits.local:100.x.y.z"          # <-- your Start9's Tailscale IP
+    environment:
+      NODE_EXTRA_CA_CERTS: /certs/startos-ca.crt
+    volumes:
+      - ./startos-ca.crt:/certs/startos-ca.crt:ro
+```
+
+with, in `.env`:
+
+```bash
+LIGHTNING_BACKEND=lnbits
+LNBITS_URL=https://lnbits.local
+LNBITS_API_KEY=YOUR_LNBITS_API_KEY
+```
+
+Download the StartOS root CA from the StartOS dashboard (System → Root CA / "Download Certificate"), save it next to `docker-compose.yml` as `startos-ca.crt` (PEM), and make sure the `extra_hosts` name, the `LNBITS_URL` host, and the certificate's subject are the **same** hostname.
+
+**Case B — a `*.ts.net` MagicDNS hostname your browser already trusts.** Tailscale has provisioned a real (Let's Encrypt) certificate for that name, so you do **not** need the CA mount — only the name-resolution pin. Drop the `NODE_EXTRA_CA_CERTS`/`volumes` lines and use the `.ts.net` name everywhere:
+
+```yaml
+# docker-compose.override.yml  — local only, do not commit
+services:
+  void:
+    extra_hosts:
+      - "your-start9.tailnet-name.ts.net:100.x.y.z"   # <-- tailnet IP
+```
+
+```bash
+LNBITS_URL=https://your-start9.tailnet-name.ts.net
+```
+
+Whichever case, recreate the container so the override structure is picked up — `docker compose up -d` (a plain `restart` does **not** apply override changes).
+
+**Verify from inside the container** with the *same* code path the app uses, so the test exercises DNS, routing, and TLS trust exactly as the server will:
+
+```bash
+docker compose exec void node -e 'fetch(process.env.LNBITS_URL+"/api/v1/wallet",{headers:{"X-Api-Key":process.env.LNBITS_API_KEY}}).then(r=>r.text()).then(t=>console.log(t)).catch(e=>{console.error(e.message);process.exit(1)})'
+```
+
+- **Wallet JSON** → DNS, routing, and TLS all work. Create a room.
+- **A certificate error** (`self-signed certificate in certificate chain`, `unable to verify the first certificate`) → Node does not trust the cert. Confirm the file is mounted (`docker compose exec void ls -l /certs/startos-ca.crt`), that `NODE_EXTRA_CA_CERTS` points at that exact path, that you downloaded the StartOS **root** CA (PEM), and that the `LNBITS_URL` hostname matches the certificate's subject. If your working browser URL was a trusted `*.ts.net` name (Case B), you should not need the CA at all — switch to that hostname.
+- **`getaddrinfo ENOTFOUND`** → the `extra_hosts` pin did not take: check the entry spelling and that you recreated with `docker compose up -d`, not `restart`.
+- **A hang, `ECONNREFUSED`, or `ENETUNREACH`** → the container's egress is not reaching the tailnet, or a Tailscale ACL is blocking it. Confirm the host itself can reach the box (`tailscale ping <name>`, or `curl` from the host shell) and that the Start9's Tailscale ACLs permit the VPS. Note: a busybox `wget` cert test would be misleading here because `wget` reads the OS trust store, not `NODE_EXTRA_CA_CERTS` — the `node -e` check above is authoritative.
+
+Unlike the Tor bridge, a tailnet hop is low-latency, so the default `LIGHTNING_FETCH_TIMEOUT_MS` (`8000`) is normally fine — the knob is still there (§5) if your link is unusually slow.
+
+**Tailscale bridge or Tor bridge?** Use Tailscale when both machines are on your tailnet — it is simpler and faster. Use the Tor bridge above when you cannot (or will not) put the VPS on the tailnet and must reach LNbits over its `.onion`.
+
+After bring-up, confirm the effective-config log shows the LNbits backend (§4f) and that `POST /api/paywall/invoice` returns a real `lnbc…` invoice string.
+
 #### BTCPay Server Setup
 
 Use BTCPay when you want a more full-featured self-hosted payment backend.
@@ -876,7 +950,7 @@ VOID is human-only; all agent code has been removed.
 |---|---|---|---|---|
 | `LIGHTNING_BACKEND` | Yes, for predictable behavior | `mock`, `lnbits`, or `btcpay` | Selects Lightning backend adapter | Often defaults to mock |
 | `PAYWALL_SECRET` | Yes in production | random 32-byte hex string | JWT signing secret for host authorization | An ephemeral secret is auto-generated at startup — do not rely on this for production |
-| `LNBITS_URL` | Required for LNbits | `http://lnbits-host:port` | LNbits base URL | Ignored unless backend is `lnbits` |
+| `LNBITS_URL` | Required for LNbits | `http://lnbits-host:port` | LNbits base URL. For a Start9/StartOS LNbits reached over Tailscale use `https://<hostname>` (not a raw `100.x` IP) — see "Reaching LNbits over Tailscale" in the LNbits section | Ignored unless backend is `lnbits` |
 | `LNBITS_API_KEY` | Required for LNbits | secret value | LNbits API key | Ignored unless backend is `lnbits` |
 | `BTCPAY_URL` | Required for BTCPay | `https://btcpay.your-domain.example` | BTCPay base URL | Ignored unless backend is `btcpay` |
 | `BTCPAY_API_KEY` | Required for BTCPay | secret value | BTCPay Greenfield API key | Ignored unless backend is `btcpay` |
