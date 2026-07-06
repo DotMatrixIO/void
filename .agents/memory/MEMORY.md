@@ -67,3 +67,4 @@
 - [release.yml onion-host threading](release-onion-threading.md) — VITE_VOID_ONION_HOST from a repo VARIABLE must be threaded identically into all 4 prod build paths + docker build-arg or the reproducibility diff breaks; unset = fails closed.
 - [useRoomConnection reconnect ONION-budget flake](void-client-reconnect-onion-budget-flake.md) — timing test fails ~1/10 in full+isolated runs; if it is the ONLY red on a copy/UI diff, it is not yours.
 - [publish-inventory manifest drift](publish-inventory-manifest-drift.md) — post full-tree recovery, UNCLASSIFIED attached_assets (legacy tracked .txt) + STALE replit.nix (absent from tree) are GENUINE drift, not empty-index artifacts; owned by publish/manifest task, not recovery.
+- [VOID self-host LNbits over Tailscale](void-selfhost-lnbits-tailscale.md) — operator's canonical VPS reaches LNbits on a Start9 (onion) via Tailscale; LNBITS_URL must be the tailnet 100.x IP (not onion, not MagicDNS); container has no Tor.
