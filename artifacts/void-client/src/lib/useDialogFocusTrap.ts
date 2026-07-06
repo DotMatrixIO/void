@@ -104,7 +104,6 @@ export function useDialogFocusTrap<T extends HTMLElement>(
     // We deliberately re-run only on `active` toggling. onEscape is read
     // through a ref so callers can pass fresh closures without thrashing
     // the listener.
-    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [active]);
 
   return ref;

@@ -204,14 +204,20 @@ jobs:
             exit 1
           fi
           EXEC_USER=$(docker exec "$CID" id -un)
-          PS_USER=$(docker exec "$CID" ps -o user= -p 1 | tr -d ' ')
+          # The hardened production image (node:slim) ships no `ps`, so read
+          # PID 1's owner from /proc and compare UIDs on the runner instead of
+          # shelling out to `ps` inside the container (which would false-fail
+          # this guard with "ps: not found"). See
+          # docs/security-audit-public-2026-04.md §7.1.
+          PID1_UID=$(docker exec "$CID" cat /proc/1/status | awk '/^Uid:/ {print $2; exit}')
+          NODE_UID=$(docker exec "$CID" id -u node)
           IMAGE_ID=$(docker inspect -f '{{.Image}}' "$CID")
           FRESH_USER=$(docker run --rm --entrypoint id "$IMAGE_ID" -un)
           echo "Live container id -un: $EXEC_USER"
-          echo "Live container PID 1 user: $PS_USER"
+          echo "Live container PID 1 uid: $PID1_UID (node uid: $NODE_UID)"
           echo "Fresh container id -un: $FRESH_USER"
-          if [ "$EXEC_USER" != "node" ] || [ "$PS_USER" != "node" ] || [ "$FRESH_USER" != "node" ]; then
-            echo "::error::Container is not running as 'node' (live: '$EXEC_USER', PID1: '$PS_USER', fresh: '$FRESH_USER')."
+          if [ "$EXEC_USER" != "node" ] || [ -z "$PID1_UID" ] || [ "$PID1_UID" != "$NODE_UID" ] || [ "$FRESH_USER" != "node" ]; then
+            echo "::error::Container is not running as 'node' (live: '$EXEC_USER', PID1 uid: '$PID1_UID', node uid: '$NODE_UID', fresh: '$FRESH_USER')."
             echo "::error::The Dockerfile may have re-elevated to root. See docs/security-audit-public-2026-04.md §7.1."
             (cd /tmp/void-clean && docker compose logs void) || true
             exit 1
