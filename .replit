@@ -431,19 +431,3 @@ channel = "stable-25_05"
 [userenv.development]
 ENABLE_AGENT_ROOMS = "1"
 PAYWALL_JITTER_DISABLE = "1"
-
-[[ports]]
-localPort = 8080
-externalPort = 8080
-
-[[ports]]
-localPort = 22687
-externalPort = 80
-
-[[ports]]
-localPort = 24363
-externalPort = 3001
-
-[[ports]]
-localPort = 24364
-externalPort = 3000
