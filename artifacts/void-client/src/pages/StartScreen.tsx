@@ -557,7 +557,9 @@ export default function StartScreen({ onJoinRoom, sessionNotice, onDismissNotice
             fontFamily: "var(--font-mono)",
             fontSize: "12px",
             letterSpacing: "1px",
-            color: "var(--fg)",
+            /* Task #1112: this toast sits on --surface-dark — --fg is 1.09:1
+               there (invisible). --fg-on-dark is the body-text-on-dark token. */
+            color: "var(--fg-on-dark)",
             lineHeight: 1.5,
             display: "flex",
             flexDirection: "column",

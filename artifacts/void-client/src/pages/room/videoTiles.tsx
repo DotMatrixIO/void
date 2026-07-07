@@ -194,7 +194,7 @@ export function describeSecureChannelFailure(reason: SecureChannelFailureReason)
 export function NoSignalSlot() {
   return (
     <div className="void-no-signal">
-      <div style={{ fontSize: "13px", letterSpacing: "3px", color: "#5C5040" }}>NO SIGNAL</div>
+      <div style={{ fontSize: "13px", letterSpacing: "3px", color: "#A89E90" }}>NO SIGNAL</div>
     </div>
   );
 }

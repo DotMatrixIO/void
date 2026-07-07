@@ -35,7 +35,21 @@ import {
 // `lib/onionReachability.ts` for the signal hierarchy. When the
 // probe is inconclusive (offline, timeout, no `fetch`), we degrade
 // to the previous always-visible link with no hint.
-export default function OnionMirrorLink() {
+//
+// Task #1112 — `onPavement` threads PageFooter's dark-band context down
+// here. The default (light) mode keeps the Task #406 dark-ink tokens tuned
+// for tan --bg. On the landing page's #14110D pavement band those tokens
+// were dark-on-dark (invisible), so on-pavement mode swaps them for the
+// already-audited dark-surface palette: dim captions to #A89E90
+// (headerBtn/headerBg, 7.13:1) and primary text to --fg-on-dark
+// (fgOnDark/surfaceDark, ~16.6:1). The teal borders/underlines stay in
+// both modes — --teal on #14110D is audited as a non-text affordance
+// ('teal outline on slot bg', ≥3:1) in check-contrast.mjs.
+interface OnionMirrorLinkProps {
+  onPavement?: boolean;
+}
+
+export default function OnionMirrorLink({ onPavement = false }: OnionMirrorLinkProps) {
   const onionUrl = useMemo(() => getOnionMirrorUrl(), []);
   const [copied, setCopied] = useState(false);
   const [copyFailed, setCopyFailed] = useState(false);
@@ -139,6 +153,12 @@ export default function OnionMirrorLink() {
   if (!onionUrl) return null;
   if (isOnionOrigin()) return null;
 
+  // Task #1112: mode-dependent ink. Light mode = Task #406 dark-ink tokens;
+  // on-pavement mode = PageFooter's dark-band palette (#A89E90 dim text,
+  // matching PageFooter's own textColor literal, + --fg-on-dark primary).
+  const dimColor = onPavement ? "#A89E90" : "var(--fg-dim)";
+  const primaryColor = onPavement ? "var(--fg-on-dark)" : "var(--fg)";
+
   return (
     <div
       data-testid="onion-mirror-link"
@@ -156,7 +176,7 @@ export default function OnionMirrorLink() {
       <span
         data-testid="onion-mirror-clearnet-state"
         style={{
-          color: "var(--fg-dim)",
+          color: dimColor,
           fontSize: "10px",
           letterSpacing: "2px",
           textTransform: "uppercase",
@@ -174,7 +194,7 @@ export default function OnionMirrorLink() {
           justifyContent: "center",
         }}
       >
-      <span style={{ color: "var(--fg-dim)" }}>ALSO ON .ONION: </span>
+      <span style={{ color: dimColor }}>ALSO ON .ONION: </span>
       <a
         href={onionUrl}
         rel="noopener noreferrer"
@@ -183,7 +203,8 @@ export default function OnionMirrorLink() {
           // Use --fg (8.37:1) for the URL itself; the teal underline and the
           // sibling "Copy" pill carry the accent affordance without putting
           // unreadable text in a footer that links to our .onion mirror.
-          color: "var(--fg)",
+          // Task #1112: --fg-on-dark on the pavement band.
+          color: primaryColor,
           textDecoration: "underline",
           textDecorationColor: "var(--teal)",
           textUnderlineOffset: "2px",
@@ -206,8 +227,8 @@ export default function OnionMirrorLink() {
           border: "1px solid var(--teal)",
           // Task #406: text was var(--teal) on --bg = 1.64:1 (FAIL AA). Use
           // --fg (8.37:1) for the label; the 1px teal border keeps the
-          // affordance.
-          color: "var(--fg)",
+          // affordance. Task #1112: --fg-on-dark on the pavement band.
+          color: primaryColor,
           fontFamily: "var(--font-mono)",
           fontSize: "10px",
           letterSpacing: "2px",
@@ -222,7 +243,7 @@ export default function OnionMirrorLink() {
         <span
           data-testid="onion-mirror-hint"
           style={{
-            color: "var(--fg-dim)",
+            color: dimColor,
             fontSize: "10px",
             letterSpacing: "1px",
             textTransform: "uppercase",
@@ -248,7 +269,8 @@ export default function OnionMirrorLink() {
             fontSize: "16px",
             // Task #406: text was var(--teal) on --bg = 1.64:1 (FAIL AA). Use
             // --fg (8.37:1); the 1px teal border keeps the affordance.
-            color: "var(--fg)",
+            // Task #1112: --fg-on-dark on the pavement band.
+            color: primaryColor,
             letterSpacing: "1px",
             border: "1px solid var(--teal)",
             padding: "3px 6px",
@@ -269,7 +291,7 @@ export default function OnionMirrorLink() {
       <span
         data-testid="onion-mirror-bootstrap-note"
         style={{
-          color: "var(--fg-dim)",
+          color: dimColor,
           fontSize: "10px",
           letterSpacing: "0.5px",
           lineHeight: 1.4,
@@ -293,7 +315,8 @@ export default function OnionMirrorLink() {
         style={{
           // Task #406 pattern: --teal on --bg is 1.64:1 (FAIL AA). Use --fg
           // (8.37:1) for the text and carry the accent on the teal underline.
-          color: "var(--fg)",
+          // Task #1112: --fg-on-dark on the pavement band.
+          color: primaryColor,
           textDecoration: "underline",
           textDecorationColor: "var(--teal)",
           textUnderlineOffset: "2px",

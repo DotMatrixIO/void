@@ -239,7 +239,9 @@ export default function HamburgerMenu() {
                 fontSize: "11px",
                 letterSpacing: "3px",
                 textTransform: "uppercase",
-                color: "#5C5040",
+                /* Task #1112: #5C5040 is 2.40:1 on the dark menu panel —
+                   #A89E90 is the audited dim-on-dark token (7.13:1). */
+                color: "#A89E90",
               }}
             >
               <span style={{ color: "var(--burnt)", marginRight: "10px" }}>▌</span>
@@ -301,7 +303,7 @@ export default function HamburgerMenu() {
               padding: "0 28px",
               fontSize: "12px",
               letterSpacing: "2px",
-              color: "#5C5040",
+              color: "#A89E90",
               textTransform: "uppercase",
               fontFamily: "var(--font-mono)",
             }}

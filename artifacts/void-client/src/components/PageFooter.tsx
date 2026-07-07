@@ -90,7 +90,7 @@ export default function PageFooter({ paddingTop = "24px", onPavement = false }: 
           DOCS →
         </Link>
       </div>
-      <OnionMirrorLink />
+      <OnionMirrorLink onPavement={onPavement} />
       {/* Architecture spec line — the quiet, one-line technical summary that
           used to be a loud orange band on the landing page. Lives here as the
           footer's bottom row so it reads as a spec/credits line site-wide.

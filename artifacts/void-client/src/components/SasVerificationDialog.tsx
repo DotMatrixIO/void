@@ -253,7 +253,9 @@ export default function SasVerificationDialog({
             </div>
             <div
               style={{
-                color: "var(--fg-dim)",
+                /* Task #1112: this block sits on --surface-dark — --fg-dim is
+                   1.39:1 there; #A89E90 is the audited dim-on-dark token. */
+                color: "#A89E90",
                 fontSize: "12px",
                 lineHeight: 1.5,
                 textTransform: "none",

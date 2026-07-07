@@ -1049,7 +1049,9 @@ export default function PreviewGate({ voidPhrase, showRelayToggle = false, roomI
               border: "2px solid var(--gold)",
               padding: "20px",
               fontFamily: "var(--font-mono)",
-              color: "var(--fg)",
+              /* Task #1112: --fg is 1.09:1 on --surface-dark (invisible).
+                 --fg-on-dark is the body-text-on-dark token. */
+              color: "var(--fg-on-dark)",
               fontSize: "13px",
               letterSpacing: "1px",
               lineHeight: 1.5,
@@ -1092,8 +1094,10 @@ export default function PreviewGate({ voidPhrase, showRelayToggle = false, roomI
                 }}
                 style={{
                   background: "transparent",
-                  border: "1px solid var(--fg-dim)",
-                  color: "var(--fg-dim)",
+                  /* Task #1112: --fg-dim is 1.39:1 on the --surface-dark modal —
+                     #A89E90 is the audited dim-on-dark token (7.13:1). */
+                  border: "1px solid #A89E90",
+                  color: "#A89E90",
                   fontFamily: "var(--font-mono)",
                   fontSize: "16px",
                   letterSpacing: "2px",

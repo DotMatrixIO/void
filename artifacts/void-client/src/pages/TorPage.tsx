@@ -189,7 +189,10 @@ export default function TorPage() {
 
         {/* If this deployment publishes an .onion mirror, surface it here. */}
         <div style={sectionStyle}>
-          <OnionMirrorLink />
+          {/* Task #1112: this page is dark-asphalt (body text is
+              --fg-on-dark), so the onion block needs its on-pavement
+              palette or it renders dark-on-dark (invisible). */}
+          <OnionMirrorLink onPavement />
         </div>
 
         <p style={dimStyle}>

@@ -177,8 +177,10 @@ export default function PeerTileGrid({
                       top: "8px",
                       left: "8px",
                       background: "rgba(20,17,13,0.6)",
-                      border: "1px solid var(--fg-dim)",
-                      color: "var(--fg-dim)",
+                      /* Task #1112: --fg-dim is 1.39:1 on the dark video slot —
+                         #A89E90 is the audited dim-on-dark token (7.13:1). */
+                      border: "1px solid #A89E90",
+                      color: "#A89E90",
                       fontFamily: "var(--font-mono)",
                       fontSize: "11px",
                       fontWeight: 700,
@@ -316,7 +318,7 @@ export default function PeerTileGrid({
                         <div style={{
                           fontSize: "11px",
                           letterSpacing: "1.2px",
-                          color: "var(--fg-dim)",
+                          color: "#A89E90",
                           lineHeight: 1.4,
                           maxWidth: "200px",
                         }}>
@@ -378,7 +380,7 @@ export default function PeerTileGrid({
                     lineHeight: 1.6,
                   }}>
                     PHRASE MISMATCH<br />
-                    <span style={{ fontSize: "12px", letterSpacing: "1.5px", color: "var(--fg-dim)" }}>VERIFY VOID PHRASE</span>
+                    <span style={{ fontSize: "12px", letterSpacing: "1.5px", color: "#A89E90" }}>VERIFY VOID PHRASE</span>
                   </div>
                 )}
                 {!isMe && !secureChannelFailures[participant.id] && !cryptoMismatch[participant.id] && phraseChangedNotice[participant.id] && (
@@ -415,7 +417,7 @@ export default function PeerTileGrid({
                     }}
                   >
                     KEYS ROTATED<br />
-                    <span style={{ fontSize: "12px", letterSpacing: "1.2px", color: "var(--fg-dim)" }}>RE-VERIFY SAS</span>
+                    <span style={{ fontSize: "12px", letterSpacing: "1.2px", color: "#A89E90" }}>RE-VERIFY SAS</span>
                   </button>
                 )}
                 {!isMe && !secureChannelFailures[participant.id] && !cryptoMismatch[participant.id] && !phraseChangedNotice[participant.id] && silentRekeyNotice[participant.id] && (
@@ -453,7 +455,7 @@ export default function PeerTileGrid({
                   const chipColor =
                     vState === "verified" ? "var(--teal)"
                     : vState === "mismatch" ? "var(--red)"
-                    : "var(--fg-dim)";
+                    : "#A89E90";
                   const chipLabel =
                     vState === "pending" ? "SECURING…"
                     : vState === "verified" ? "YOU VERIFIED"

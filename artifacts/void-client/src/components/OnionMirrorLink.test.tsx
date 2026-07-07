@@ -107,6 +107,49 @@ describe("OnionMirrorLink explainer deep link (Task #1039)", () => {
   });
 });
 
+describe("OnionMirrorLink on-pavement ink (Task #1112)", () => {
+  it("keeps the light-background dark-ink tokens by default", () => {
+    sessionStorage.setItem(ONION_REACHABILITY_CACHE_KEY, "reachable");
+    render(<OnionMirrorLink />);
+    expect(screen.getByTestId("onion-mirror-clearnet-state")).toHaveStyle({
+      color: "var(--fg-dim)",
+    });
+    expect(screen.getByTestId("onion-mirror-bootstrap-note")).toHaveStyle({
+      color: "var(--fg-dim)",
+    });
+    expect(screen.getByTestId("onion-mirror-copy")).toHaveStyle({
+      color: "var(--fg)",
+    });
+    expect(screen.getByTestId("onion-mirror-explainer-link")).toHaveStyle({
+      color: "var(--fg)",
+    });
+  });
+
+  it("swaps to the audited dark-surface palette when onPavement is set", async () => {
+    sessionStorage.setItem(ONION_REACHABILITY_CACHE_KEY, "unreachable");
+    render(<OnionMirrorLink onPavement />);
+    // Dim captions → #A89E90 (headerBtn/headerBg, 7.13:1 on #14110D).
+    expect(screen.getByTestId("onion-mirror-clearnet-state")).toHaveStyle({
+      color: "#A89E90",
+    });
+    expect(screen.getByTestId("onion-mirror-bootstrap-note")).toHaveStyle({
+      color: "#A89E90",
+    });
+    expect(screen.getByTestId("onion-mirror-hint")).toHaveStyle({
+      color: "#A89E90",
+    });
+    // Primary text → --fg-on-dark (fgOnDark/surfaceDark, ~16.6:1).
+    const url = screen.getByRole("link", { name: ONION_URL });
+    expect(url).toHaveStyle({ color: "var(--fg-on-dark)" });
+    expect(screen.getByTestId("onion-mirror-copy")).toHaveStyle({
+      color: "var(--fg-on-dark)",
+    });
+    expect(screen.getByTestId("onion-mirror-explainer-link")).toHaveStyle({
+      color: "var(--fg-on-dark)",
+    });
+  });
+});
+
 describe("OnionMirrorLink re-probe on connectivity recovery (Task #426)", () => {
   it("clears the cache and re-probes when the browser fires 'online'", async () => {
     sessionStorage.setItem(ONION_REACHABILITY_CACHE_KEY, "unreachable");

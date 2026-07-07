@@ -67,11 +67,14 @@ export default function RoomHeaderBar({
   const chipStyle: CSSProperties = {
     fontSize: "11px",
     letterSpacing: "1.2px",
-    color: "var(--fg-dim)",
+    /* Task #1112: chips sit on the dark .void-header — --fg-dim is 1.39:1
+       there (invisible). #A89E90 is the audited dim-on-dark token
+       (headerBtn/headerBg, 7.13:1 in check-contrast.mjs). */
+    color: "#A89E90",
     fontFamily: "var(--font-mono)",
     fontWeight: 700,
     textTransform: "uppercase",
-    border: "1px solid var(--fg-dim)",
+    border: "1px solid #A89E90",
     padding: "2px 5px",
     whiteSpace: "nowrap",
   };
@@ -270,7 +273,7 @@ function FullHeaderContents(props: FullHeaderContentsProps) {
           >
             {phraseMasked ? maskedPhrase : voidPhrase}
           </span>
-          <span aria-hidden="true" style={{ display: "inline-flex", color: "var(--fg-dim)", flexShrink: 0 }}>
+          <span aria-hidden="true" style={{ display: "inline-flex", color: "#A89E90", flexShrink: 0 }}>
             {phraseMasked ? (
               <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
                 <rect x="5" y="11" width="14" height="9" rx="1" />
@@ -347,8 +350,8 @@ function FullHeaderContents(props: FullHeaderContentsProps) {
             title="Local-only verification status. You marked these peers' phrase pairs as matching."
             style={{
               ...chipStyle,
-              color: verifiedCount === aggregateTotal ? "var(--teal)" : "var(--fg-dim)",
-              borderColor: verifiedCount === aggregateTotal ? "var(--teal)" : "var(--fg-dim)",
+              color: verifiedCount === aggregateTotal ? "var(--teal)" : "#A89E90",
+              borderColor: verifiedCount === aggregateTotal ? "var(--teal)" : "#A89E90",
             }}
           >
             YOU VERIFIED {verifiedCount}/{aggregateTotal} {aggregateTotal === 1 ? "PEER" : "PEERS"}

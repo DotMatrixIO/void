@@ -414,7 +414,10 @@ export default function Bip39PhraseGrid({
                 top: "-12px",
                 left: "2px",
                 fontSize: "12px",
-                color: "var(--fg-dim)",
+                /* Task #1112: slot numbers render on the dark concrete card
+                   wrapping the grid — --fg-dim is 1.39:1 there; #A89E90 is
+                   the audited dim-on-dark token (7.13:1). */
+                color: "#A89E90",
                 letterSpacing: "1px",
               }}
             >
@@ -524,7 +527,7 @@ export default function Bip39PhraseGrid({
                             fontFamily: "var(--font-mono)",
                             fontSize: "12px",
                             letterSpacing: "1.5px",
-                            color: "var(--fg-dim)",
+                            color: "#A89E90",
                             textTransform: "uppercase",
                             userSelect: "none",
                           }}

@@ -837,7 +837,10 @@ export default function DocsThreatModelPage() {
           appears below. Reachable from inside the installed app, too.
         </p>
         <div style={{ marginTop: "12px" }}>
-          <OnionMirrorLink />
+          {/* Task #1112: this section sits on the dark #14110D concrete
+              card, so the onion block needs its on-pavement palette or it
+              renders dark-on-dark (invisible). */}
+          <OnionMirrorLink onPavement />
         </div>
 
         {/* Task #385 — Onion fail-open audit.
