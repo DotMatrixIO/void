@@ -366,6 +366,11 @@ export default function PeerTileGrid({
                     transform: "translate(-50%, -50%)",
                     fontSize: "12px",
                     letterSpacing: "2px",
+                    /* contrast-exception: --red on the near-black chip is
+                       3.40:1 — the documented alarm-color exemption; the
+                       2px red border and center placement carry the signal.
+                       The scanner also mispairs this with a sibling red
+                       button background. */
                     color: "var(--red)",
                     fontFamily: "var(--font-mono)",
                     fontWeight: 700,

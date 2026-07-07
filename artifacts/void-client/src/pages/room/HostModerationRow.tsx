@@ -74,7 +74,10 @@ export default function HostModerationRow({
           </div>
           {pendingKnocks.map((kp) => (
             <div key={kp} style={{ display: "flex", alignItems: "center", justifyContent: "space-between", gap: "8px" }}>
-              <div aria-hidden="true" style={{ fontSize: "12px", letterSpacing: "2px", color: "var(--gold)", fontFamily: "var(--font-mono)" }}>
+              {/* Task #1114: was var(--gold) on var(--surface) (1.21:1,
+                  unreadable). --fg passes AA; the gold bottom border keeps
+                  the accent. */}
+              <div aria-hidden="true" style={{ fontSize: "12px", letterSpacing: "2px", color: "var(--fg)", fontFamily: "var(--font-mono)" }}>
                 {knockLabel(kp)} IS KNOCKING
               </div>
               <div style={{ display: "flex", gap: "6px" }}>
@@ -116,7 +119,10 @@ export default function HostModerationRow({
         >
           {pendingRelayRequests.map((rp) => (
             <div key={rp} style={{ display: "flex", alignItems: "center", justifyContent: "space-between", gap: "8px" }}>
-              <div style={{ fontSize: "12px", letterSpacing: "2px", color: "var(--teal)", fontFamily: "var(--font-mono)" }}>
+              {/* Task #1114: was var(--teal) on var(--surface) (1.28:1,
+                  unreadable). --fg passes AA; the teal bottom border keeps
+                  the accent. */}
+              <div style={{ fontSize: "12px", letterSpacing: "2px", color: "var(--fg)", fontFamily: "var(--font-mono)" }}>
                 {rp.replace(/^peer-/, "PEER-").toUpperCase()} ASKS FOR RELAY ONLY
               </div>
               <div style={{ display: "flex", gap: "6px" }}>

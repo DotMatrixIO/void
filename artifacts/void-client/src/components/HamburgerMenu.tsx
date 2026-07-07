@@ -303,6 +303,9 @@ export default function HamburgerMenu() {
               padding: "0 28px",
               fontSize: "12px",
               letterSpacing: "2px",
+              /* contrast-exception: sits on the menu's dark surface
+                 (#A89E90 = 7.13:1 audited pairing); the scanner pairs it
+                 with the sibling gold button background above. */
               color: "#A89E90",
               textTransform: "uppercase",
               fontFamily: "var(--font-mono)",

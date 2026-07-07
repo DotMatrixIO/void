@@ -957,7 +957,10 @@ export default function PreviewGate({ voidPhrase, showRelayToggle = false, roomI
                 fontFamily: "var(--font-mono)",
                 fontSize: "11px",
                 letterSpacing: "1px",
-                color: "var(--fg-dim)",
+                /* Task #1114: was var(--fg-dim) on the dark concrete card
+                   (1.39:1, invisible). --fg-on-dark is the token for text
+                   on dark surfaces. */
+                color: "var(--fg-on-dark)",
                 textAlign: "center",
               }}
             >
@@ -972,7 +975,10 @@ export default function PreviewGate({ voidPhrase, showRelayToggle = false, roomI
                 fontFamily: "var(--font-mono)",
                 fontSize: "11px",
                 letterSpacing: "1px",
-                color: "var(--fg-dim)",
+                /* Task #1114: was var(--fg-dim) on the dark concrete card
+                   (1.39:1, invisible). --fg-on-dark is the token for text
+                   on dark surfaces. */
+                color: "var(--fg-on-dark)",
                 textAlign: "center",
               }}
             >

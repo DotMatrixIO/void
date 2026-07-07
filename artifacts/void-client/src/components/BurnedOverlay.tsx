@@ -101,7 +101,11 @@ export default function BurnedOverlay({ onDismiss, autoDismissMs = BURN_AUTO_DIS
         style={{
           fontSize: "12px",
           letterSpacing: "3px",
-          color: "var(--fg-dim)",
+          /* Task #1114: was var(--fg-dim) on the #0A0908 overlay (1.47:1,
+             invisible). var(--bg) reads at ~9:1 on this surface — same
+             treatment as the reason line documented in
+             docs/contrast-audit.md. */
+          color: "var(--bg)",
           fontFamily: "var(--font-mono)",
           textTransform: "uppercase",
         }}

@@ -709,7 +709,10 @@ export default function StartScreen({ onJoinRoom, sessionNotice, onDismissNotice
               title="You reached VOID over the public internet (clearnet), not our .onion address. To put our signaling layer behind a Tor hidden service, open the .onion address in Tor Browser before your next call. It does not hide your IP from the other people on the call."
               style={{
                 fontSize: "11px",
-                color: "var(--fg-dim)",
+                /* Task #1114: was var(--fg-dim) on the dark header
+                   (1.39:1, invisible). #A89E90 is the audited header
+                   text tone (7.13:1) — still non-alarming/dim. */
+                color: "#A89E90",
                 letterSpacing: "2px",
                 textTransform: "uppercase",
               }}

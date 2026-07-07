@@ -276,7 +276,11 @@ export default function SplashScreen({ onDone }: Props) {
           "linear-gradient(rgba(10,9,8,0.88), rgba(10,9,8,0.88)), url('/concrete.jpeg')",
         backgroundSize: "auto, 600px auto",
         backgroundRepeat: "repeat",
-        color: "var(--fg)",
+        /* Task #1114: was var(--fg) (1.15:1 on #0A0908 — invisible if any
+           child ever inherits it; every current child sets an explicit
+           SPLASH_* color). --fg-on-dark is the correct inherited default
+           on this dark surface. */
+        color: "var(--fg-on-dark)",
         display: "flex",
         flexDirection: "column",
         alignItems: "center",

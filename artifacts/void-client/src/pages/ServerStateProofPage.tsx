@@ -67,7 +67,9 @@ const inputStyle: React.CSSProperties = {
 
 const buttonStyle: React.CSSProperties = {
   background: "var(--gold)",
-  color: "var(--bg)",
+  /* Task #1114: was var(--bg) on the gold button (1.35:1, unreadable).
+     --fg on --gold is the audited 7.91:1 pairing. */
+  color: "var(--fg)",
   border: "2px solid var(--gold)",
   padding: "10px 16px",
   fontFamily: "var(--font-mono)",

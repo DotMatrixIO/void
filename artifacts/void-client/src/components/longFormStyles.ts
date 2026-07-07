@@ -105,11 +105,18 @@ export const dividerStyle: CSSProperties = {
 };
 
 export const linkStyle: CSSProperties = {
+  /* contrast-exception: shared style definitions with no background of
+     their own — the scanner pairs them with the unrelated dividerStyle
+     gold background above. Actual usage sites are on the long-form
+     pages' dark sections. */
   color: "var(--gold)",
   textDecoration: "none",
   borderBottom: "1px solid var(--gold)",
 };
 
+/* contrast-exception: shared accent-text style definitions with no
+   background of their own — the scanner pairs them with the unrelated
+   dividerStyle gold background above. Usage sites are dark sections. */
 export const tealText: CSSProperties = { color: "var(--teal)" };
 export const goldText: CSSProperties = { color: "var(--gold)" };
 export const burntText: CSSProperties = { color: "var(--burnt)" };

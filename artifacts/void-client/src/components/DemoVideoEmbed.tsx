@@ -237,6 +237,9 @@ export default function DemoVideoEmbed({
             fontFamily: "var(--font-mono)",
             fontSize: "12px",
             letterSpacing: "2px",
+            /* contrast-exception: figcaption sits on the page's light
+               var(--bg) body (--fg-dim = 6.56:1); the scanner pairs it
+               with the sibling video's var(--surface-dark) box above. */
             color: "var(--fg-dim)",
             lineHeight: 1.7,
             textTransform: "uppercase",

@@ -576,7 +576,10 @@ export default function PaywallModal({ onSuccess, onClose, headerLabel, successL
                       fontFamily: "var(--font-mono)",
                       fontSize: "11px",
                       letterSpacing: "1px",
-                      color: "var(--fg)",
+                      /* Task #1114: was var(--fg) on var(--surface-dark)
+                         (1.09:1, invisible). --fg-on-dark is the token for
+                         text on dark surfaces (16.27:1). */
+                      color: "var(--fg-on-dark)",
                       lineHeight: 1.55,
                       display: "flex",
                       flexDirection: "column",
@@ -667,6 +670,11 @@ export default function PaywallModal({ onSuccess, onClose, headerLabel, successL
                       </div>
                     ) : (
                       <>
+                        {/* contrast-exception: this line sits on the extend-preview
+                            panel (background var(--surface), 6.56:1 with --fg); the
+                            scanner pairs it with the nested gold chip's
+                            var(--surface-dark) background, which only the chip's own
+                            gold text renders on. */}
                         <div style={{ fontSize: "12px", letterSpacing: "1.5px", color: "var(--fg)", lineHeight: 1.4 }}>
                           EXTENDING WILL MOVE YOUR END TIME TO{" "}
                           <span data-testid="extend-preview-new-end" style={{ color: "var(--gold)", fontWeight: 700, background: "var(--surface-dark)", padding: "1px 6px" }}>
@@ -720,6 +728,9 @@ export default function PaywallModal({ onSuccess, onClose, headerLabel, successL
           })()}
 
           {phase === "loading" && (
+            /* contrast-exception: renders on the modal's var(--bg) panel
+               (--fg-dim = 6.56:1); the scanner pairs it with the sibling
+               "CAPPED" chip's var(--surface-dark) background above. */
             <div style={{ fontSize: "13px", letterSpacing: "3px", color: "var(--fg-dim)", padding: "40px 0" }}>
               GENERATING INVOICE...
             </div>
@@ -886,7 +897,10 @@ export default function PaywallModal({ onSuccess, onClose, headerLabel, successL
                     fontFamily: "var(--font-mono)",
                     fontSize: "11px",
                     letterSpacing: "1px",
-                    color: "var(--fg)",
+                    /* Task #1114: was var(--fg) on var(--surface-dark)
+                       (1.09:1, invisible). --fg-on-dark is the token for
+                       text on dark surfaces (16.27:1). */
+                    color: "var(--fg-on-dark)",
                     lineHeight: 1.6,
                     textAlign: "center",
                     border: "2px solid var(--gold)",
@@ -1165,7 +1179,10 @@ export default function PaywallModal({ onSuccess, onClose, headerLabel, successL
                       fontFamily: "var(--font-mono)",
                       fontSize: "12px",
                       letterSpacing: "1px",
-                      color: "var(--fg)",
+                      /* Task #1114: was var(--fg) on the var(--surface-dark)
+                         card (1.09:1, invisible). --fg-on-dark is the token
+                         for text on dark surfaces (16.27:1). */
+                      color: "var(--fg-on-dark)",
                       lineHeight: 1.6,
                     }}
                   >

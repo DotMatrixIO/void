@@ -329,7 +329,10 @@ function CombinedAllowUnmaskedDialog({
             fontFamily: "'Staatliches', system-ui, sans-serif",
             fontSize: "20px",
             letterSpacing: "3px",
-            color: "var(--gold)",
+            /* Task #1114: was var(--gold) on the var(--bg) panel (1.35:1,
+               unreadable). --fg passes AA; the 3px gold panel border keeps
+               the brand accent. */
+            color: "var(--fg)",
             textTransform: "uppercase",
             margin: 0,
           }}

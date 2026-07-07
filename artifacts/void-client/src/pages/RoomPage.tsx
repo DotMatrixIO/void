@@ -894,7 +894,10 @@ export default function RoomPage({ roomId, e2eKey, voidPhrase, fromUrl = false, 
           style={{
             fontSize: "12px",
             letterSpacing: "3px",
-            color: "var(--fg-dim)",
+            /* Task #1114: was var(--fg-dim) on the #0A0908 overlay (1.47:1,
+               invisible). var(--bg) reads at ~9:1 — same treatment as the
+               BurnedOverlay reason line in docs/contrast-audit.md. */
+            color: "var(--bg)",
             fontFamily: "var(--font-mono)",
             textTransform: "uppercase",
           }}
@@ -1035,7 +1038,9 @@ export default function RoomPage({ roomId, e2eKey, voidPhrase, fromUrl = false, 
               fontFamily: "var(--font-mono)",
               fontWeight: 700,
               fontSize: "16px",
-              color: "var(--red)",
+              /* Task #1114: was var(--red) on var(--surface) (2.10:1). --fg
+                 passes AA; the 3px red panel border keeps the error signal. */
+              color: "var(--fg)",
               marginBottom: "16px",
               marginTop: 0,
               letterSpacing: "2px",
@@ -1105,7 +1110,9 @@ export default function RoomPage({ roomId, e2eKey, voidPhrase, fromUrl = false, 
             width: "100%",
           }}
         >
-          <div style={{ fontSize: "18px", fontWeight: 700, color: "var(--red)", marginBottom: "12px", letterSpacing: "2px" }}>
+          {/* Task #1114: was var(--red) on var(--surface) (2.10:1). --fg
+              passes AA; the 3px red panel border keeps the error signal. */}
+          <div style={{ fontSize: "18px", fontWeight: 700, color: "var(--fg)", marginBottom: "12px", letterSpacing: "2px" }}>
             {error}
           </div>
           <div
@@ -1176,6 +1183,9 @@ export default function RoomPage({ roomId, e2eKey, voidPhrase, fromUrl = false, 
           <div
             id="knock-pending-dialog-desc"
             className="blink"
+            /* contrast-exception: sits on the knock dialog's var(--surface)
+               panel (--fg-dim = 5.14:1); the scanner pairs it with the
+               sibling heading's var(--surface-dark) chip above. */
             style={{ fontSize: "12px", color: "var(--fg-dim)", letterSpacing: "1px", marginBottom: "24px" }}
           >
             WAITING FOR HOST TO LET YOU IN
@@ -1199,10 +1209,14 @@ export default function RoomPage({ roomId, e2eKey, voidPhrase, fromUrl = false, 
           </div>
         </div>
         <div style={{ flex: 1, display: "flex", alignItems: "center", justifyContent: "center", flexDirection: "column", gap: "12px" }}>
+          {/* contrast-exception: these lines sit on the light void-shell
+              body (var(--bg), --fg-dim = 6.56:1); the scanner pairs them
+              with the dark void-header above. */}
           <div style={{ fontSize: "14px", letterSpacing: "3px", color: "var(--fg-dim)", textTransform: "uppercase" }} className="blink">
             {localStream ? "JOINING..." : "INITIALIZING..."}
           </div>
           {!localStream && (
+            /* contrast-exception: light void-shell body, see above. */
             <div style={{ fontSize: "12px", color: "var(--fg-dim)", letterSpacing: "2px" }}>
               ALLOW CAMERA + MIC
             </div>
@@ -1516,7 +1530,9 @@ export default function RoomPage({ roomId, e2eKey, voidPhrase, fromUrl = false, 
               <span
                 data-testid="tor-onion-indicator"
                 title="You loaded VOID over a Tor .onion address. Your local connection is forced to relay-only so peers cannot see your clearnet IP."
-                style={{ letterSpacing: "2px", color: "var(--teal)" }}
+                // Task #1114: was var(--teal) on the var(--teal) banner
+                // (1.00:1, literally invisible). Inherit the banner's #fff.
+                style={{ letterSpacing: "2px" }}
               >
                 Connected via Tor onion
               </span>
@@ -1610,7 +1626,9 @@ export default function RoomPage({ roomId, e2eKey, voidPhrase, fromUrl = false, 
           style={{
             background: "var(--surface)",
             borderBottom: "2px solid var(--teal)",
-            color: "var(--teal)",
+            /* Task #1114: was var(--teal) on var(--surface) (1.28:1,
+               unreadable). --fg passes AA; the teal border keeps the accent. */
+            color: "var(--fg)",
             fontSize: "12px",
             letterSpacing: "2px",
             padding: "6px 12px",
@@ -1640,8 +1658,10 @@ export default function RoomPage({ roomId, e2eKey, voidPhrase, fromUrl = false, 
 
       {/* Active sharing banner */}
       {isScreenSharing && (
+        /* Task #1114: text was var(--bg) on the gold banner (1.35:1,
+           unreadable). --fg on --gold is the audited 7.91:1 pairing. */
         <div style={{
-          background: "var(--gold)", color: "var(--bg)", fontSize: "12px",
+          background: "var(--gold)", color: "var(--fg)", fontSize: "12px",
           letterSpacing: "2px", textAlign: "center", padding: "6px 12px",
           fontFamily: "var(--font-mono)", fontWeight: 700, display: "flex",
           alignItems: "center", justifyContent: "center", gap: "12px",
@@ -2089,7 +2109,9 @@ export default function RoomPage({ roomId, e2eKey, voidPhrase, fromUrl = false, 
               maxWidth: "300px",
               padding: "10px 12px",
               background: "var(--surface-dark)",
-              color: "var(--fg)",
+              /* Task #1114: was var(--fg) on var(--surface-dark) (1.09:1,
+                 invisible). --fg-on-dark is the token for dark surfaces. */
+              color: "var(--fg-on-dark)",
               border: "2px solid var(--gold)",
               fontSize: "11px",
               lineHeight: 1.5,

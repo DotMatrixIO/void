@@ -145,6 +145,9 @@ export default function BrowserBlockedScreen({ detected, brave = false, onBack }
             <li key={step}>{step}</li>
           ))}
         </ol>
+        {/* contrast-exception: sits on the page's light var(--bg) body
+            (--fg-dim = 6.56:1); the scanner pairs it with the sibling
+            heading's #0a0a0a chip above. */}
         <p style={{ fontSize: "11px", letterSpacing: "1.5px", color: "var(--fg-dim)", margin: 0 }}>
           NOTHING WAS SENT. THE ROOM PHRASE STAYED ON YOUR DEVICE.
         </p>
@@ -155,6 +158,9 @@ export default function BrowserBlockedScreen({ detected, brave = false, onBack }
             alignSelf: "center",
             marginTop: "8px",
             background: "transparent",
+            /* contrast-exception: transparent button on the page's light
+               var(--bg) body (--fg = 8+:1); the scanner pairs it with the
+               sibling heading's #0a0a0a chip above. */
             color: "var(--fg)",
             border: "1px solid var(--fg-dim, #555)",
             padding: "10px 18px",

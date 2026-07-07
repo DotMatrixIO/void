@@ -486,6 +486,8 @@ export default function Bip39PhraseGrid({
                      the aria-invalid="true" / role="alert" semantics that
                      screen readers announce. The text is a supplementary
                      spelling hint, not the sole indicator of the error. */
+                  /* contrast-exception: see the full reason directly above
+                     (kept adjacent so the scanner's lookback finds it). */
                   color: "var(--red)",
                   textAlign: "center",
                   padding: "2px 4px 0",

@@ -225,7 +225,10 @@ export default function QrScannerModal({ onResult, onClose }: Props) {
         style={{
           fontSize: "13px",
           letterSpacing: "3px",
-          color: "var(--fg-dim)",
+          /* Task #1114: was var(--fg-dim) on the near-black overlay
+             (~1.3:1, invisible). --fg-on-dark is the token for text on
+             dark surfaces. */
+          color: "var(--fg-on-dark)",
           textTransform: "uppercase",
           marginBottom: "12px",
           textAlign: "center",
@@ -237,7 +240,10 @@ export default function QrScannerModal({ onResult, onClose }: Props) {
         style={{
           fontSize: "12px",
           letterSpacing: "1px",
-          color: "var(--fg-dim)",
+          /* Task #1114: was var(--fg-dim) on the near-black overlay
+             (~1.3:1, invisible). --fg-on-dark is the token for text on
+             dark surfaces. */
+          color: "var(--fg-on-dark)",
           textTransform: "uppercase",
           marginBottom: "16px",
           textAlign: "center",
@@ -280,7 +286,10 @@ export default function QrScannerModal({ onResult, onClose }: Props) {
               justifyContent: "center",
               fontSize: "12px",
               letterSpacing: "3px",
-              color: "var(--fg-dim)",
+              /* Task #1114: was var(--fg-dim) on the #000 camera box
+                 (1.55:1, invisible). --fg-on-dark is the token for text
+                 on dark surfaces. */
+              color: "var(--fg-on-dark)",
             }}
           >
             STARTING CAMERA...

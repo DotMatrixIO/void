@@ -103,6 +103,9 @@ export default function InAppBrowserScreen({ detected, isIOS, isAndroid }: Props
           You’re viewing this page inside {label}. Built-in browsers like this one usually block
           camera and microphone access, which VOID needs to start a call.
         </p>
+        {/* contrast-exception: sits on the page's light var(--bg) body
+            (--fg-dim = 6.56:1); the scanner pairs it with the sibling
+            heading's #0a0a0a chip above. */}
         <p style={{ fontSize: "12px", lineHeight: 1.55, margin: 0, color: "var(--fg-dim)" }}>
           {isIOS && "Tap the share button in the corner, then Open in Safari."}
           {isAndroid && "Tap the three-dot menu, then Open in browser."}
@@ -165,6 +168,9 @@ export default function InAppBrowserScreen({ detected, isIOS, isAndroid }: Props
             </a>
           )}
         </div>
+        {/* contrast-exception: sits on the page's light var(--bg) body
+            (--fg-dim = 6.56:1); the scanner pairs it with the sibling
+            OPEN IN CHROME link's var(--surface-dark) background above. */}
         <p style={{ fontSize: "11px", letterSpacing: "1.5px", color: "var(--fg-dim)", margin: 0 }}>
           NOTHING WAS SENT. NOTHING WAS STORED.
         </p>

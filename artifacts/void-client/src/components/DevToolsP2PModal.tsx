@@ -44,7 +44,9 @@ const headingStyle: React.CSSProperties = {
   fontFamily: "'Staatliches', system-ui, sans-serif",
   fontSize: "22px",
   letterSpacing: "3px",
-  color: "var(--teal)",
+  /* Task #1114: was var(--teal) on the var(--bg) panel (2.08:1, hard to
+     read). --fg passes AA; the 3px teal panel border keeps the accent. */
+  color: "var(--fg)",
   textTransform: "uppercase",
   margin: 0,
 };
@@ -59,7 +61,8 @@ const stepStyle: React.CSSProperties = {
 const stepNumStyle: React.CSSProperties = {
   display: "inline-block",
   minWidth: "24px",
-  color: "var(--teal)",
+  /* Task #1114: was var(--teal) on var(--bg) (2.08:1). --fg passes AA. */
+  color: "var(--fg)",
   fontWeight: 700,
   letterSpacing: "1px",
 };
@@ -129,6 +132,9 @@ export default function DevToolsP2PModal({ open, onClose }: Props) {
         <p
           style={{
             ...stepStyle,
+            /* contrast-exception: sits on the modal's var(--bg) panel
+               (--fg-dim = 6.56:1); the scanner pairs it with the sibling
+               burnt/teal chips inside the list above. */
             color: "var(--fg-dim)",
             fontStyle: "italic",
             borderTop: "1px solid var(--fg-dim)",

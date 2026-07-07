@@ -39,7 +39,9 @@ export default function ExpiryWarningToast({
       style={{
         background: "var(--surface)",
         borderBottom: "2px solid var(--gold)",
-        color: "var(--gold)",
+        /* Task #1114: was var(--gold) on var(--surface) (1.21:1, unreadable).
+           --fg passes AA; the gold bottom border keeps the accent. */
+        color: "var(--fg)",
         fontSize: "12px",
         letterSpacing: "2px",
         padding: "8px 12px",
@@ -87,7 +89,10 @@ export default function ExpiryWarningToast({
           style={{
             background: "transparent",
             border: "1px solid var(--gold)",
-            color: "var(--gold)",
+            /* Task #1114: was var(--gold) on the toast's var(--surface)
+               (1.21:1, unreadable). --fg passes AA; the gold border keeps
+               the accent. */
+            color: "var(--fg)",
             padding: "2px 8px",
             fontSize: "12px",
             letterSpacing: "2px",

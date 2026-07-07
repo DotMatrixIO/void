@@ -68,7 +68,10 @@ export default function ScreenShareModals({
               style={{
                 fontSize: "13px",
                 letterSpacing: "3px",
-                color: "var(--gold)",
+                /* Task #1114: was var(--gold) on the var(--bg) panel
+                   (1.35:1, unreadable). --fg passes AA; the gold panel
+                   border keeps the accent. */
+                color: "var(--fg)",
                 fontWeight: 700,
                 marginBottom: "16px",
                 marginTop: 0,
@@ -196,6 +199,9 @@ export default function ScreenShareModals({
                 <div style={{
                   fontSize: "12px",
                   lineHeight: 1.7,
+                  /* contrast-exception: sits on the dialog's var(--bg) panel
+                     (--fg = 8+:1); the scanner pairs it with the sibling #000
+                     preview box above. */
                   color: "var(--fg)",
                   letterSpacing: "0.5px",
                   marginBottom: "16px",
@@ -205,6 +211,9 @@ export default function ScreenShareModals({
                 <div style={{
                   fontSize: "12px",
                   lineHeight: 1.6,
+                  /* contrast-exception: sits on the dialog's var(--bg) panel
+                     (--fg-dim = 6.56:1); the scanner pairs it with the sibling
+                     #000 preview box above. */
                   color: "var(--fg-dim)",
                   letterSpacing: "0.5px",
                   marginBottom: "20px",
@@ -217,6 +226,9 @@ export default function ScreenShareModals({
               <div style={{
                 fontSize: "12px",
                 lineHeight: 1.7,
+                /* contrast-exception: sits on the dialog's var(--bg) panel
+                   (--fg = 8+:1); the scanner pairs it with the sibling #000
+                   preview box above. */
                 color: "var(--fg)",
                 letterSpacing: "0.5px",
                 marginBottom: "20px",
