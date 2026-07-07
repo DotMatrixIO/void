@@ -24,6 +24,7 @@
     "check:nav-routes": "node scripts/check-nav-routes-drift.mjs",
     "check:fragments-sync": "node scripts/check-fragments-sync.mjs",
     "check:contrast": "node scripts/check-contrast.mjs",
+    "check:ink-surface": "node scripts/check-ink-surface.mjs",
     "check:no-display-media-audio": "node scripts/check-no-display-media-audio.mjs",
     "check:signaling-envelope": "node scripts/check-signaling-envelope.mjs",
     "check:doc-code-drift": "node scripts/check-doc-code-drift.mjs",

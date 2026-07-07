@@ -11,6 +11,21 @@ whenever a color token is changed.**
 pnpm --filter @workspace/void-client run check:contrast
 ```
 
+A sibling guard, `scripts/check-ink-surface.mjs` (`check:ink-surface`, also
+in the `marketing-voice` chain), closes the gap the pair list can't cover:
+it statically scans every `color:` declaration in `src/**/*.{tsx,ts,css}`,
+pairs it with the background it can attribute to that ink (same style
+object, same CSS rule block, or the nearest surface marker above —
+including `.void-header`/`.void-video-slot` class usage), and fails on any
+pairing that computes below a **3.0:1 invisibility floor**. This catches
+both invisible dark-on-dark (the Task #1112 class of bug) and invisible
+light-on-light ink at CI time. Legitimate cases are exempted via the same
+`/* contrast-exception: <reason> */` comment convention; pre-existing
+findings are grandfathered in `scripts/ink-surface-baseline.json` (a
+count-based ratchet keyed by file|ink|surface — regenerate only to lock in
+improvements with `node scripts/check-ink-surface.mjs --update-baseline`,
+never to absorb new offenders).
+
 ## Thresholds
 
 | WCAG criterion | Threshold | Applies to |
