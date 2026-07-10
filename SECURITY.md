@@ -3,8 +3,8 @@
 # Security policy
 
 VOID is a privacy tool. A vulnerability here can deanonymize a call or expose
-content that the whole design promises will never be stored. Treat reports
-accordingly.
+content that the whole design promises will never be stored. Please treat
+reports accordingly.
 
 ## Reporting a vulnerability
 
@@ -12,7 +12,7 @@ accordingly.
 problem.** A public report is a disclosure, and disclosure before a fix puts
 every running deployment at risk.
 
-Use a private channel:
+Please use a private channel:
 
 - **Preferred:** GitHub's private vulnerability reporting — the "Report a
   vulnerability" button under this repository's **Security** tab. This opens a
@@ -28,8 +28,7 @@ proof of concept, an exploit chain, or details that would harm users if they
 leaked before a fix. Encrypt to the DotMatrixIO security contact key:
 
 - **Fingerprint:** `836B F5D8 8581 B7F4 6F57  E38B 595B 3235 2423 2AD7`
-- **User ID:** `dot_matrix_apps@proton.me` (the pseudonymous DotMatrixIO
-  identity — there is no real name attached).
+- **User ID:** `dot_matrix_apps@proton.me`
 - **Public key:** committed to this repository as
   [`security-contact.asc`](security-contact.asc). You can also fetch it from
   the keyserver:
@@ -43,10 +42,6 @@ encrypting. If you cannot encrypt, send the report in the clear rather than
 not reporting at all — make first contact and we can arrange a secure
 channel.
 
-> Note: the maintainers must enable private vulnerability reporting in the
-> repository settings before the "Report a vulnerability" button appears;
-> doing so is a launch gate. Until it is enabled, email the address above.
-
 When you report, please include:
 
 - What the issue is and the impact you think it has (e.g. "the server can
@@ -58,11 +53,9 @@ When you report, please include:
 
 ## What to expect
 
-This is a small project; be patient but expect honesty about timelines rather
-than a promise we cannot keep.
+This is a small project; please be patient.
 
 - We aim to acknowledge a report within a few days.
-- We will tell you whether we consider it in scope, and why.
 - We will keep you updated as we work on a fix, and credit you when it ships
   unless you ask us not to.
 
@@ -86,7 +79,6 @@ promised.
 
 ## Coordinated disclosure
 
-We ask for coordinated disclosure: give us a reasonable window to ship a fix
-before going public. We will not threaten researchers acting in good faith. If
-we disagree about scope or severity, we will say so plainly and explain our
-reasoning.
+We ask for coordinated disclosure: please give us a reasonable window to ship a
+fix before going public. If we disagree about scope or severity, we will say so
+plainly and explain.
