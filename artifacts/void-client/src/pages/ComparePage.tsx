@@ -9,7 +9,7 @@ import CompareTable from "@/components/CompareTable";
 import ReadMoreButton from "@/components/short-form/ReadMoreButton";
 
 // /compare short-form page. Per user direction: one-sentence intro,
-// the eleven-row comparison table itself, and READ THE LONG VERSION →
+// the thirteen-row comparison table itself, and READ THE LONG VERSION →
 // to /docs/compare. No bullets, no breadcrumb, no other prose. The
 // per-row prose, the "when VOID is the wrong tool" guidance, and the
 // one-last-thing closer live on /docs/compare.

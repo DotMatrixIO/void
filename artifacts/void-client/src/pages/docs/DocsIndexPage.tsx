@@ -37,7 +37,7 @@ const DOC_ENTRIES: ReadonlyArray<DocEntry> = [
     title: "COMPARE",
     href: "/docs/compare",
     description:
-      "Full eleven-row comparison table vs the major alternatives, what we win and what we lose, when VOID is the wrong tool.",
+      "Full thirteen-row comparison table vs the major alternatives, what we win and what we lose, when VOID is the wrong tool.",
     updated: "2026-05-27",
   },
   {

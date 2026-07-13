@@ -76,8 +76,8 @@ export const OG_ROUTES = [
     path: "/compare",
     title: "VOID | Why not Zoom, Meet, FaceTime, Signal, or Jitsi?",
     description:
-      "Eleven rows. Six tools. We win eight rows. We lose three. Read it before anything else.",
-    headline: "We win eight rows. We lose three.",
+      "Thirteen rows. Six tools. We win ten rows. We lose three. Read it before anything else.",
+    headline: "We win ten rows. We lose three.",
     accent: "teal",
     // Compare is the second-most-shared marketing link. Point it at the
     // editorial hero rather than the templated compare card, matching
@@ -98,7 +98,7 @@ export const OG_ROUTES = [
     path: "/pricing",
     title: "VOID | Pricing — 1,000 sats per room",
     description:
-      "1,000 sats — about $1 — per room. Lightning-native. One-shot. No subscription, no upsell.",
+      "1,000 sats — about $1 — per room. Pay with Lightning — no identity attached. One-shot. No subscription, no upsell.",
     headline: "1,000 sats. ≈ $1. The room burns down.",
     accent: "gold",
   },

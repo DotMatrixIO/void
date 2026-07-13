@@ -14,6 +14,7 @@
 - [ffmpeg atrim+afade order](ffmpeg-atrim-fade-order.md) — afade after atrim mutes the segment (fades use original PTS); always asetpts=N/SR/TB before afade. Verify with astats (peak -inf = dead).
 - [media play() rejection overlay](media-play-rejection-overlay.md) — every video/audio .play() in demo-video artifacts needs .catch(); uncaught reject → Replit runtime-error overlay "no supported sources" on unmount/scene-end.
 - [Playwright engines on Replit](playwright-engines-replit.md) — firefox isn't pre-installed (chromium+webkit are); headless WebKit Linux can't do WebRTC ICE — skip live-WebRTC there, cover Safari manually.
+- [Playwright browser bridge from Nix store](playwright-browser-bridge.md) — mass "Executable doesn't exist" = empty ms-playwright cache; downloads can't run (missing system libs); symlink the Nix-store browsers into the expected revision paths.
 - [Fake .onion origin across engines](onion-origin-fake-webkit.md) — replace Chromium-only --host-resolver-rules with page.route() re-fetch to 127.0.0.1 so WebKit too sees the fake hostname; clipboard perms are Chromium-only.
 - [void-client autofocus test race](void-client-test-autofocus-race.md) — StartScreen join mode arms a 50ms grid-slot autofocus; under load it steals focus mid-test → use fireEvent.change(target), not click+keyboard.
 - [void-client a11y patterns](void-client-a11y.md) — SAS announce = natural words only (no spell/NATO); axe-in-jsdom is component-scoped (src/test/axe.ts); role=menu needs ALL children menuitem; axe pass ≠ SR-accessible (hand off manual checklist).

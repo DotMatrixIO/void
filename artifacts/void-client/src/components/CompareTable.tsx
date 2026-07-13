@@ -1,5 +1,5 @@
 // SPDX-License-Identifier: AGPL-3.0-or-later
-// Shared eleven-row / six-tool comparison table.
+// Shared thirteen-row / six-tool comparison table.
 //
 // Originally lived inline in DocsComparePage. Extracted so the
 // short-form /compare page can render the same table beneath its
@@ -33,11 +33,11 @@ export const compareRows: CompareRow[] = [
     values: { ZOOM: "NO", MEET: "NO", FACETIME: "NO", SIGNAL: "NO", JITSI: "YES", VOID: "YES" },
   },
   {
-    label: "NO PERSISTENT USER GRAPH",
+    label: "NO RECORD OF WHO MET WHOM",
     values: { ZOOM: "NO", MEET: "NO", FACETIME: "NO", SIGNAL: "NO", JITSI: "DEPENDS", VOID: "YES" },
   },
   {
-    label: "SELF-HOSTABLE",
+    label: "RUNS ON YOUR OWN HARDWARE",
     values: { ZOOM: "NO", MEET: "NO", FACETIME: "NO", SIGNAL: "NO", JITSI: "YES", VOID: "YES" },
   },
   {
@@ -45,20 +45,28 @@ export const compareRows: CompareRow[] = [
     values: { ZOOM: "NO", MEET: "NO", FACETIME: "NO", SIGNAL: "YES", JITSI: "YES", VOID: "YES" },
   },
   {
-    label: "EPHEMERAL BY DEFAULT",
+    label: "NOTHING SAVED BY DEFAULT",
     values: { ZOOM: "NO", MEET: "NO", FACETIME: "NO", SIGNAL: "NO", JITSI: "YES", VOID: "YES" },
   },
   {
-    label: "BIOMETRIC MASKING BUILT IN",
+    label: "FACE & VOICE MASKS BUILT IN",
     values: { ZOOM: "NO", MEET: "NO", FACETIME: "NO", SIGNAL: "NO", JITSI: "NO", VOID: "YES" },
   },
   {
-    label: "LIGHTNING-NATIVE PAYMENT",
+    label: "PAY WITH LIGHTNING — NO IDENTITY ATTACHED",
     values: { ZOOM: "NO", MEET: "NO", FACETIME: "NO", SIGNAL: "NO", JITSI: "NO", VOID: "YES" },
   },
   {
-    label: "PEER-TO-PEER MEDIA",
+    label: "NO SERVER IN THE MIDDLE",
     values: { ZOOM: "NO", MEET: "NO", FACETIME: "YES", SIGNAL: "NO", JITSI: "NO", VOID: "YES" },
+  },
+  {
+    label: "WORKS FROM A LINK — NO APP TO INSTALL",
+    values: { ZOOM: "DEPENDS", MEET: "YES", FACETIME: "DEPENDS", SIGNAL: "NO", JITSI: "YES", VOID: "YES" },
+  },
+  {
+    label: "SERVER NEVER HOLDS THE KEY",
+    values: { ZOOM: "DEPENDS", MEET: "NO", FACETIME: "DEPENDS", SIGNAL: "YES", JITSI: "DEPENDS", VOID: "YES" },
   },
   {
     label: "MAX PARTICIPANTS",

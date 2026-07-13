@@ -3,6 +3,11 @@ import { Link } from "wouter";
 import PageShell from "@/components/PageShell";
 import ScrollableTable from "@/components/ScrollableTable";
 import {
+  compareRows,
+  compareTools,
+  type CompareTool,
+} from "@/components/CompareTable";
+import {
   sectionStyle,
   headingStyle,
   sectionHeadingStyle as subheadingStyle,
@@ -22,138 +27,14 @@ const closingLineStyle: React.CSSProperties = {
 
 type CellValue = "YES" | "NO" | string;
 
-const tools = ["ZOOM", "MEET", "FACETIME", "SIGNAL", "JITSI", "VOID"] as const;
+// Row data is shared with the short-form /compare page — the single
+// source of truth lives in CompareTable.tsx so the two tables can
+// never drift apart again.
+const tools = compareTools;
 
-type Tool = (typeof tools)[number];
+type Tool = CompareTool;
 
-interface Row {
-  label: string;
-  values: Record<Tool, CellValue>;
-}
-
-const rows: Row[] = [
-  {
-    label: "NO ACCOUNT REQUIRED",
-    values: {
-      ZOOM: "NO",
-      MEET: "NO",
-      FACETIME: "NO",
-      SIGNAL: "NO",
-      JITSI: "YES",
-      VOID: "YES",
-    },
-  },
-  {
-    label: "NO PERSISTENT USER GRAPH",
-    values: {
-      ZOOM: "NO",
-      MEET: "NO",
-      FACETIME: "NO",
-      SIGNAL: "NO",
-      JITSI: "DEPENDS",
-      VOID: "YES",
-    },
-  },
-  {
-    label: "SELF-HOSTABLE",
-    values: {
-      ZOOM: "NO",
-      MEET: "NO",
-      FACETIME: "NO",
-      SIGNAL: "NO",
-      JITSI: "YES",
-      VOID: "YES",
-    },
-  },
-  {
-    label: "OPEN SOURCE",
-    values: {
-      ZOOM: "NO",
-      MEET: "NO",
-      FACETIME: "NO",
-      SIGNAL: "YES",
-      JITSI: "YES",
-      VOID: "YES",
-    },
-  },
-  {
-    label: "EPHEMERAL BY DEFAULT",
-    values: {
-      ZOOM: "NO",
-      MEET: "NO",
-      FACETIME: "NO",
-      SIGNAL: "NO",
-      JITSI: "YES",
-      VOID: "YES",
-    },
-  },
-  {
-    label: "BIOMETRIC MASKING BUILT IN",
-    values: {
-      ZOOM: "NO",
-      MEET: "NO",
-      FACETIME: "NO",
-      SIGNAL: "NO",
-      JITSI: "NO",
-      VOID: "YES",
-    },
-  },
-  {
-    label: "LIGHTNING-NATIVE PAYMENT",
-    values: {
-      ZOOM: "NO",
-      MEET: "NO",
-      FACETIME: "NO",
-      SIGNAL: "NO",
-      JITSI: "NO",
-      VOID: "YES",
-    },
-  },
-  {
-    label: "PEER-TO-PEER MEDIA",
-    values: {
-      ZOOM: "NO",
-      MEET: "NO",
-      FACETIME: "YES",
-      SIGNAL: "NO",
-      JITSI: "NO",
-      VOID: "YES",
-    },
-  },
-  {
-    label: "MAX PARTICIPANTS",
-    values: {
-      ZOOM: "1000",
-      MEET: "500",
-      FACETIME: "32",
-      SIGNAL: "50",
-      JITSI: "100",
-      VOID: "4",
-    },
-  },
-  {
-    label: "NATIVE MOBILE APPS",
-    values: {
-      ZOOM: "YES",
-      MEET: "YES",
-      FACETIME: "YES",
-      SIGNAL: "YES",
-      JITSI: "YES",
-      VOID: "NO",
-    },
-  },
-  {
-    label: "RECORDING / TRANSCRIPTS",
-    values: {
-      ZOOM: "YES",
-      MEET: "YES",
-      FACETIME: "NO",
-      SIGNAL: "NO",
-      JITSI: "YES",
-      VOID: "NO",
-    },
-  },
-];
+const rows = compareRows;
 
 function cellColor(value: CellValue, tool: Tool): string {
   if (value === "DEPENDS") return "var(--gold)";
@@ -222,7 +103,7 @@ export default function ComparePage() {
           Fair question. Here is the table.
         </div>
         <p style={{ marginBottom: "0", ...dimText }}>
-          Eleven rows. Six tools. We win eight. We lose three.
+          Thirteen rows. Six tools. We win ten. We lose three.
         </p>
       </div>
 
@@ -310,41 +191,51 @@ export default function ComparePage() {
           Competitor values reflect each product&apos;s default consumer
           offering as of April 2026.{" "}
           <span style={{ textTransform: "none", letterSpacing: "0.5px" }}>
-            &ldquo;Ephemeral by default&rdquo; means the platform is built
+            &ldquo;Nothing saved by default&rdquo; means the platform is built
             around the assumption that the meeting / room / conversation is
             not retained — no persistent meeting ID, no account-bound
             history, no recording or transcript by default. Jitsi public
             rooms qualify; self-hosted Jitsi behavior depends on the
             operator.{" "}
-            &ldquo;Biometric masking built in&rdquo; means VOID ships local
+            &ldquo;Face &amp; voice masks built in&rdquo; means VOID ships local
             video and audio masking modes; their strength varies by mode and
             is detailed on the{" "}
             <Link href="/docs/biometric" style={{ color: "var(--teal)", textDecoration: "underline" }}>
               biometric page
             </Link>
-            . &ldquo;Peer-to-peer media&rdquo; means call audio and video
+            . &ldquo;No server in the middle&rdquo; means call audio and video
             travel directly between participants with no media server in the
             path. The server-based tools relay every stream; Signal sends
             group calls through a forwarding server; FaceTime keeps a small
             call direct, as VOID does.{" "}
-            &ldquo;No persistent user graph&rdquo; means the platform does not
+            &ldquo;No record of who met whom&rdquo; means the platform does not
             accumulate a durable record of who met whom across calls. VOID&rsquo;s
             signaling server sees participant IP addresses while a room is live
             and keeps nothing after it ends; Jitsi depends on the operator&rsquo;s
             logging and deployment, hence DEPENDS. &ldquo;Open source&rdquo; means
             the source is published under a license that lets you read, run, and
             modify it — VOID and Signal under the AGPL, Jitsi under Apache; the
-            proprietary tools publish nothing.
+            proprietary tools publish nothing.{" "}
+            &ldquo;Works from a link — no app to install&rdquo; means a guest
+            can join a call in an ordinary browser with nothing to download.
+            Zoom is DEPENDS because its browser join is degraded and the flow
+            pushes the desktop app; FaceTime is DEPENDS because guests can join
+            via link in a browser but the host needs an Apple device.{" "}
+            &ldquo;Server never holds the key&rdquo; means the operator&rsquo;s
+            servers never possess the key that decrypts the call. In VOID the
+            key is derived from the room phrase on your device and never sent
+            to the server. Signal also keeps keys on-device; Zoom and FaceTime
+            depend on which mode is in use; Jitsi depends on the deployment.
           </span>
         </p>
       </div>
 
       <div style={dividerStyle} />
 
-      {/* THE EIGHT ROWS WE WIN */}
+      {/* THE TEN ROWS WE WIN */}
       <div style={sectionStyle}>
         <div style={subheadingStyle}>
-          <span style={tealText}>▌</span> THE EIGHT ROWS WE WIN
+          <span style={tealText}>▌</span> THE TEN ROWS WE WIN
         </div>
         <p style={{ marginBottom: "16px" }}>
           <span style={goldText}>No account required.</span> An account is
@@ -352,7 +243,7 @@ export default function ComparePage() {
           remember you. No offense.
         </p>
         <p style={{ marginBottom: "16px" }}>
-          <span style={goldText}>No persistent user graph.</span> Other tools
+          <span style={goldText}>No record of who met whom.</span> Other tools
           remember who met whom — the contact list, the call history, the org
           chart that accretes over months. That graph is the thing that gets
           subpoenaed. VOID never builds it. The signaling server sees IP
@@ -360,7 +251,7 @@ export default function ComparePage() {
           is no record of who you talked to, because there is no record at all.
         </p>
         <p style={{ marginBottom: "16px" }}>
-          <span style={goldText}>Self-hostable.</span> The whole stack runs
+          <span style={goldText}>Runs on your own hardware.</span> The whole stack runs
           on your own hardware — Umbrel, StartOS, bare metal. If we
           disappear, the tool does not disappear with us. A tool that
           depends on us being around in five years is not, strictly
@@ -374,30 +265,49 @@ export default function ComparePage() {
           diff.
         </p>
         <p style={{ marginBottom: "16px" }}>
-          <span style={goldText}>Ephemeral by default.</span> Rooms die on
+          <span style={goldText}>Nothing saved by default.</span> Rooms die on
           a timer. There is no database, no recording, no transcript, and
           no AI summary. This is the whole point.
         </p>
         <p style={{ marginBottom: "16px" }}>
-          <span style={goldText}>Biometric masking built in.</span> The
+          <span style={goldText}>Face &amp; voice masks built in.</span> The
           mask runs on your GPU before a single frame leaves your device.
           What goes over the wire is enough presence to trust someone, but
           not enough to build a file on them.
         </p>
         <p style={{ marginBottom: "16px" }}>
-          <span style={goldText}>Lightning-native payment.</span> The host
+          <span style={goldText}>Pay with Lightning — no identity attached.</span> The host
           pays a small invoice, and joiners pay nothing. No credit card, no
           billing identity, no KYC. A small amount of friction stops
           automated abuse without capturing anything about who caused it.
         </p>
-        <p style={{ marginBottom: "0" }}>
-          <span style={goldText}>Peer-to-peer media.</span> Audio and video
+        <p style={{ marginBottom: "16px" }}>
+          <span style={goldText}>No server in the middle.</span> Audio and video
           flow straight from one participant to another. Nothing routes
           through a server we run, so there is no media box in the middle to
           wiretap, subpoena, or breach. The big platforms relay every stream
           through their own infrastructure; FaceTime is the one mainstream
           tool that keeps a small call direct. This is also the reason the
           next number is so small.
+        </p>
+        <p style={{ marginBottom: "16px" }}>
+          <span style={goldText}>Works from a link — no app to install.</span>{" "}
+          Send someone the link and they are in the room, in the browser they
+          already have. Nothing to download, nothing to update, nothing
+          sitting on their device afterward. Zoom technically joins in a
+          browser, but the experience is degraded and the flow keeps pushing
+          the app. FaceTime guests can join from a link, but the host needs
+          an Apple device.
+        </p>
+        <p style={{ marginBottom: "0" }}>
+          <span style={goldText}>Server never holds the key.</span> The key
+          that protects your call is derived from the room phrase on your
+          device and never sent to the server. To be fair, Signal also keeps
+          keys on-device — that row is a tie, honestly scored. The VOID
+          distinction is that there is no vendor-run key directory at all:
+          nothing to compromise, nothing to subpoena. The corporate tools
+          hold keys for you in at least some modes, which is why their cells
+          read DEPENDS or NO.
         </p>
       </div>
 

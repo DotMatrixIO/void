@@ -31,7 +31,7 @@ import ComparePage from "@/pages/ComparePage";
 // /compare short-form. Per user direction (post-#551 simplification):
 // heading + FAIR QUESTION subhead + one-sentence "There are several
 // perfectly good video tools in the world. Here is the honest score."
-// + the eleven-row comparison table + READ THE LONG VERSION →. No
+// + the thirteen-row comparison table + READ THE LONG VERSION →. No
 // bullets, no breadcrumb, no other prose.
 
 describe("ComparePage short-form", () => {
@@ -50,12 +50,12 @@ describe("ComparePage short-form", () => {
     ).toBeInTheDocument();
   });
 
-  it("renders the comparison table with all eleven rows and six tools", () => {
+  it("renders the comparison table with all thirteen rows and six tools", () => {
     render(<ComparePage />);
     const table = screen.getByTestId("compare-table");
     expect(table).toBeInTheDocument();
-    // Eleven capability rows, each rendered as a row-scope <th>.
-    expect(within(table).getAllByRole("rowheader")).toHaveLength(11);
+    // Thirteen capability rows, each rendered as a row-scope <th>.
+    expect(within(table).getAllByRole("rowheader")).toHaveLength(13);
     // Six tool columns plus the CAPABILITY label = seven column headers.
     expect(within(table).getAllByRole("columnheader")).toHaveLength(7);
     for (const tool of ["ZOOM", "MEET", "FACETIME", "SIGNAL", "JITSI", "VOID"]) {
