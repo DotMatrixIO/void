@@ -46,6 +46,23 @@ export function rejectedPublicOrigin(
 }
 
 /**
+ * Return the rejected ONION_HOSTNAME value, or null when ONION_HOSTNAME is
+ * unset/empty or valid. Mirrors rejectedPublicOrigin(): resolveAllowedOrigins()
+ * silently drops a value that fails isValidOnionHostname() (and app.ts
+ * likewise suppresses the Onion-Location header), so without a startup
+ * warning the operator believes the Tor mirror origin is allowlisted when it
+ * never was. Used by the startup warning in lib/effectiveConfig.ts.
+ */
+export function rejectedOnionHostname(
+  env: NodeJS.ProcessEnv = process.env,
+): { value: string } | null {
+  const onionHost = (env["ONION_HOSTNAME"] ?? "").trim();
+  if (!onionHost) return null;
+  if (isValidOnionHostname(onionHost)) return null;
+  return { value: onionHost };
+}
+
+/**
  * Resolve the CORS allowlist for both the Express `cors` middleware and the
  * Socket.io server. Single source of truth so the two can never disagree.
  *

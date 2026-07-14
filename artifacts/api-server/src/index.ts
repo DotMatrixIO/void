@@ -30,6 +30,9 @@ import {
   buildEffectiveConfigSummary,
   buildCorsMisconfigWarning,
   buildPublicOriginRejectedWarning,
+  buildOnionHostnameRejectedWarning,
+  buildCloudflareTurnPartialWarning,
+  buildNtfyPartialWarning,
 } from "./lib/effectiveConfig";
 import { startPricingRefreshers } from "./services/pricing";
 import { lightningFetchTimeoutStartupLine } from "./services/lightning";
@@ -200,6 +203,42 @@ logger.info(buildEffectiveConfigSummary());
   const publicOriginWarning = buildPublicOriginRejectedWarning();
   if (publicOriginWarning) {
     logger.warn(publicOriginWarning);
+  }
+}
+
+// ONION_HOSTNAME rejection guard (Task #1128: tell self-hosters when their
+// onion address is invalid instead of silently ignoring it). Same failure
+// mode as PUBLIC_ORIGIN above: resolveAllowedOrigins() drops a value that
+// fails isValidOnionHostname(), and app.ts stops emitting the Onion-Location
+// header — the operator believes the Tor mirror is wired up while it is
+// invisible everywhere. This banner names the rejected value and the
+// expected v3 shape (56 base32 chars + .onion). See lib/effectiveConfig.ts.
+{
+  const onionWarning = buildOnionHostnameRejectedWarning();
+  if (onionWarning) {
+    logger.warn(onionWarning);
+  }
+}
+
+// Half-configured Cloudflare TURN guard: with only one of
+// CLOUDFLARE_TURN_TOKEN_ID / CLOUDFLARE_TURN_API_TOKEN set, the pair is
+// silently treated as unconfigured and the server falls back to the next ICE
+// branch. Names the missing variable — never any value.
+{
+  const cloudflareWarning = buildCloudflareTurnPartialWarning();
+  if (cloudflareWarning) {
+    logger.warn(cloudflareWarning);
+  }
+}
+
+// Half-configured ntfy alerting guard: NTFY_SERVER and/or NTFY_TOKEN set
+// while NTFY_TOPIC is not means publishNtfy() is a silent no-op — the
+// operator believes alerting is on while every alert is dropped. Names only
+// variable NAMES (topic and token are secrets).
+{
+  const ntfyWarning = buildNtfyPartialWarning();
+  if (ntfyWarning) {
+    logger.warn(ntfyWarning);
   }
 }
 

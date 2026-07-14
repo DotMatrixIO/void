@@ -4,10 +4,14 @@ import {
   buildEffectiveConfigSummary,
   buildCorsMisconfigWarning,
   buildPublicOriginRejectedWarning,
+  buildOnionHostnameRejectedWarning,
+  buildCloudflareTurnPartialWarning,
+  buildNtfyPartialWarning,
 } from "../lib/effectiveConfig";
 import {
   resolveAllowedOrigins,
   rejectedPublicOrigin,
+  rejectedOnionHostname,
 } from "../lib/corsOrigins";
 import { describeLogRetention } from "../lib/logRetention";
 import {
@@ -357,5 +361,172 @@ describe("buildPublicOriginRejectedWarning", () => {
     });
     expect(out).not.toBeNull();
     expect(out).toContain('unsupported scheme "ftp"');
+  });
+});
+
+const VALID_ONION = `${"a".repeat(56)}.onion`;
+
+describe("rejectedOnionHostname", () => {
+  it("returns null when ONION_HOSTNAME is unset or empty", () => {
+    expect(rejectedOnionHostname({})).toBeNull();
+    expect(rejectedOnionHostname({ ONION_HOSTNAME: "   " })).toBeNull();
+  });
+
+  it("returns null for a valid onion hostname", () => {
+    expect(rejectedOnionHostname({ ONION_HOSTNAME: VALID_ONION })).toBeNull();
+  });
+
+  it("flags a non-onion domain", () => {
+    const out = rejectedOnionHostname({ ONION_HOSTNAME: "void.example.com" });
+    expect(out).not.toBeNull();
+    expect(out!.value).toBe("void.example.com");
+  });
+
+  it("flags a value with non-base32 characters", () => {
+    const out = rejectedOnionHostname({
+      ONION_HOSTNAME: "contains1890digits.onion",
+    });
+    expect(out).not.toBeNull();
+    expect(out!.value).toBe("contains1890digits.onion");
+  });
+
+  it("does not change the allowlist behaviour — rejected values stay dropped", () => {
+    expect(
+      resolveAllowedOrigins({ ONION_HOSTNAME: "void.example.com" }),
+    ).toEqual([]);
+    expect(resolveAllowedOrigins({ ONION_HOSTNAME: VALID_ONION })).toEqual([
+      `http://${VALID_ONION}`,
+    ]);
+  });
+});
+
+describe("buildOnionHostnameRejectedWarning", () => {
+  it("stays quiet when ONION_HOSTNAME is unset or empty", () => {
+    expect(buildOnionHostnameRejectedWarning({})).toBeNull();
+    expect(
+      buildOnionHostnameRejectedWarning({ ONION_HOSTNAME: "  " }),
+    ).toBeNull();
+  });
+
+  it("stays quiet for a valid onion hostname", () => {
+    expect(
+      buildOnionHostnameRejectedWarning({ ONION_HOSTNAME: VALID_ONION }),
+    ).toBeNull();
+  });
+
+  it("names the rejected value and the expected v3 shape", () => {
+    const out = buildOnionHostnameRejectedWarning({
+      ONION_HOSTNAME: "void.example.com",
+    });
+    expect(out).not.toBeNull();
+    expect(out).toContain("ONION_HOSTNAME SET BUT REJECTED");
+    expect(out).toContain("Rejected value: void.example.com");
+    expect(out).toContain("56 base32 characters");
+    expect(out).toContain(".onion");
+    expect(out).toContain("Onion-Location header is NOT emitted");
+  });
+
+  it("names a too-short onion value", () => {
+    const out = buildOnionHostnameRejectedWarning({
+      ONION_HOSTNAME: "short.onion",
+    });
+    expect(out).not.toBeNull();
+    expect(out).toContain("Rejected value: short.onion");
+  });
+});
+
+describe("buildCloudflareTurnPartialWarning", () => {
+  it("stays quiet when neither Cloudflare variable is set", () => {
+    expect(buildCloudflareTurnPartialWarning({})).toBeNull();
+  });
+
+  it("stays quiet when both Cloudflare variables are set", () => {
+    expect(
+      buildCloudflareTurnPartialWarning({
+        CLOUDFLARE_TURN_TOKEN_ID: "id",
+        CLOUDFLARE_TURN_API_TOKEN: "token",
+      }),
+    ).toBeNull();
+  });
+
+  it("names the missing API token when only the token ID is set", () => {
+    const out = buildCloudflareTurnPartialWarning({
+      CLOUDFLARE_TURN_TOKEN_ID: "id",
+    });
+    expect(out).not.toBeNull();
+    expect(out).toContain("CLOUDFLARE TURN HALF-CONFIGURED");
+    expect(out).toContain(
+      "CLOUDFLARE_TURN_TOKEN_ID is set, but CLOUDFLARE_TURN_API_TOKEN is not",
+    );
+  });
+
+  it("names the missing token ID when only the API token is set", () => {
+    const out = buildCloudflareTurnPartialWarning({
+      CLOUDFLARE_TURN_API_TOKEN: "token",
+    });
+    expect(out).not.toBeNull();
+    expect(out).toContain(
+      "CLOUDFLARE_TURN_API_TOKEN is set, but CLOUDFLARE_TURN_TOKEN_ID is not",
+    );
+  });
+
+  it("never echoes the API token value", () => {
+    const out = buildCloudflareTurnPartialWarning({
+      CLOUDFLARE_TURN_API_TOKEN: "super-secret-token-value",
+    });
+    expect(out).not.toBeNull();
+    expect(out).not.toContain("super-secret-token-value");
+  });
+
+  it("treats a whitespace-only value as unset", () => {
+    expect(
+      buildCloudflareTurnPartialWarning({
+        CLOUDFLARE_TURN_TOKEN_ID: "  ",
+      }),
+    ).toBeNull();
+  });
+});
+
+describe("buildNtfyPartialWarning", () => {
+  it("stays quiet when nothing ntfy-related is set", () => {
+    expect(buildNtfyPartialWarning({})).toBeNull();
+  });
+
+  it("stays quiet when NTFY_TOPIC is set", () => {
+    expect(buildNtfyPartialWarning({ NTFY_TOPIC: "topic" })).toBeNull();
+    expect(
+      buildNtfyPartialWarning({
+        NTFY_TOPIC: "topic",
+        NTFY_SERVER: "https://ntfy.example.com",
+        NTFY_TOKEN: "tok",
+      }),
+    ).toBeNull();
+  });
+
+  it("warns when NTFY_SERVER is set without a topic", () => {
+    const out = buildNtfyPartialWarning({
+      NTFY_SERVER: "https://ntfy.example.com",
+    });
+    expect(out).not.toBeNull();
+    expect(out).toContain("NTFY ALERTING HALF-CONFIGURED");
+    expect(out).toContain("NTFY_SERVER is set, but NTFY_TOPIC is not");
+  });
+
+  it("warns when NTFY_TOKEN is set without a topic and never echoes it", () => {
+    const out = buildNtfyPartialWarning({ NTFY_TOKEN: "secret-ntfy-token" });
+    expect(out).not.toBeNull();
+    expect(out).toContain("NTFY_TOKEN is set, but NTFY_TOPIC is not");
+    expect(out).not.toContain("secret-ntfy-token");
+  });
+
+  it("names both variables when both are set without a topic", () => {
+    const out = buildNtfyPartialWarning({
+      NTFY_SERVER: "https://ntfy.example.com",
+      NTFY_TOKEN: "tok",
+    });
+    expect(out).not.toBeNull();
+    expect(out).toContain(
+      "NTFY_SERVER and NTFY_TOKEN are set, but NTFY_TOPIC is not",
+    );
   });
 });

@@ -14,7 +14,11 @@
 // token is shown by its last-4 suffix only, matching the existing ICE banner.
 
 import { isTorOnly, turnUrlTerminatesOverTor } from "./torOnly";
-import { resolveAllowedOrigins, rejectedPublicOrigin } from "./corsOrigins";
+import {
+  resolveAllowedOrigins,
+  rejectedPublicOrigin,
+  rejectedOnionHostname,
+} from "./corsOrigins";
 import { cloudflareCredsConfigured, tokenIdSuffix } from "./cloudflareTurn";
 import { describeLogRetention } from "./logRetention";
 import { lightningConfigSummary } from "../services/lightning";
@@ -144,6 +148,116 @@ export function buildPublicOriginRejectedWarning(
     "  https://void.example.com",
     "  Until this is fixed the value is ignored, so cross-origin browser requests",
     "  from your client origin will be blocked. See README-selfhost.md §5.",
+    "==============================================================================",
+    "",
+  ].join("\n");
+}
+
+/**
+ * Boxed warning for a set-but-rejected ONION_HOSTNAME. Same failure mode as
+ * PUBLIC_ORIGIN above: resolveAllowedOrigins() silently drops a value that
+ * fails isValidOnionHostname(), and app.ts likewise stops emitting the
+ * Onion-Location header — so the operator believes the Tor mirror is wired
+ * up while neither the CORS allowlist nor Tor Browser's mirror hint ever see
+ * it. Names the rejected value and the expected v3 shape (56 base32 chars +
+ * .onion). Returns null when ONION_HOSTNAME is unset, empty, or valid.
+ *
+ * The hostname is PUBLIC (it ships in the Onion-Location header and the page
+ * footer), so echoing the rejected value discloses nothing sensitive.
+ */
+export function buildOnionHostnameRejectedWarning(
+  env: NodeJS.ProcessEnv = process.env,
+): string | null {
+  const rejected = rejectedOnionHostname(env);
+  if (!rejected) return null;
+
+  return [
+    "",
+    "==============================================================================",
+    "  ONION_HOSTNAME SET BUT REJECTED — the Tor mirror will NOT be advertised",
+    "------------------------------------------------------------------------------",
+    `  Rejected value: ${rejected.value}`,
+    "  Expected format: a v3 onion address — 56 base32 characters ([a-z2-7])",
+    "  followed by .onion, e.g.",
+    "  vww6ybal4bd7szmgncyruucpgfkqahzddi37ktceo3ah7ngmcopnpyyd.onion",
+    "  (no scheme, no port, no path — the bare hostname only).",
+    "  Until this is fixed the value is ignored: the onion origin is NOT added",
+    "  to the CORS allowlist and the Onion-Location header is NOT emitted, so",
+    "  Tor Browser users are never told the mirror exists. See",
+    "  README-selfhost.md.",
+    "==============================================================================",
+    "",
+  ].join("\n");
+}
+
+/**
+ * Boxed warning for a half-configured Cloudflare TURN pair. readCloudflareCreds()
+ * requires BOTH CLOUDFLARE_TURN_TOKEN_ID and CLOUDFLARE_TURN_API_TOKEN; with
+ * only one set it returns null and the server silently falls back to the next
+ * ICE branch (self-hosted TURN, STUN, or nothing). An operator who typo'd one
+ * variable name would never learn why Cloudflare TURN is inactive. Names the
+ * variable that is MISSING — never any value (the API token is a secret).
+ * Returns null when both or neither are set.
+ */
+export function buildCloudflareTurnPartialWarning(
+  env: NodeJS.ProcessEnv = process.env,
+): string | null {
+  const hasTokenId = describePresence(env["CLOUDFLARE_TURN_TOKEN_ID"]);
+  const hasApiToken = describePresence(env["CLOUDFLARE_TURN_API_TOKEN"]);
+  if (hasTokenId === hasApiToken) return null;
+
+  const missing = hasTokenId
+    ? "CLOUDFLARE_TURN_API_TOKEN"
+    : "CLOUDFLARE_TURN_TOKEN_ID";
+  const present = hasTokenId
+    ? "CLOUDFLARE_TURN_TOKEN_ID"
+    : "CLOUDFLARE_TURN_API_TOKEN";
+
+  return [
+    "",
+    "==============================================================================",
+    "  CLOUDFLARE TURN HALF-CONFIGURED — it will NOT be used",
+    "------------------------------------------------------------------------------",
+    `  ${present} is set, but ${missing} is not.`,
+    "  Cloudflare TURN requires BOTH variables; with one missing the pair is",
+    "  ignored and the server falls back to the next ICE option (self-hosted",
+    "  TURN, STUN, or none — see the ICE / TURN row in the summary above).",
+    `  To fix: set ${missing}, or unset ${present} if Cloudflare`,
+    "  TURN is not intended. See README-selfhost.md §4.",
+    "==============================================================================",
+    "",
+  ].join("\n");
+}
+
+/**
+ * Boxed warning for half-configured ntfy alerting: NTFY_SERVER and/or
+ * NTFY_TOKEN set while NTFY_TOPIC is not. publishNtfy() is an intentional
+ * silent no-op without a topic, so an operator who set the server URL (or an
+ * access token) but forgot the topic believes alerting is on while every
+ * operator alert is silently dropped. Never echoes any value — the topic is a
+ * secret and the token doubly so; only variable NAMES are reported. Returns
+ * null when NTFY_TOPIC is set, or when nothing ntfy-related is set at all.
+ */
+export function buildNtfyPartialWarning(
+  env: NodeJS.ProcessEnv = process.env,
+): string | null {
+  if (describePresence(env["NTFY_TOPIC"])) return null;
+  const present = ["NTFY_SERVER", "NTFY_TOKEN"].filter((name) =>
+    describePresence(env[name]),
+  );
+  if (present.length === 0) return null;
+
+  return [
+    "",
+    "==============================================================================",
+    "  NTFY ALERTING HALF-CONFIGURED — operator alerts will NOT be sent",
+    "------------------------------------------------------------------------------",
+    `  ${present.join(" and ")} ${present.length > 1 ? "are" : "is"} set, but NTFY_TOPIC is not.`,
+    "  Alert publishing is a silent no-op without a topic, so CSP-violation",
+    "  waves, Lightning backend shape changes, and repeated payment-service",
+    "  slowness will page nobody.",
+    `  To fix: set NTFY_TOPIC, or unset ${present.join(" and ")} if alerting`,
+    "  is not intended. See README-selfhost.md.",
     "==============================================================================",
     "",
   ].join("\n");
