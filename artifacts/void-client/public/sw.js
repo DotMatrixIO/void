@@ -84,8 +84,9 @@ self.addEventListener("activate", (e) => {
 self.addEventListener("fetch", (e) => {
   if (e.request.method !== "GET") return;
   const url = new URL(e.request.url);
+  // Socket.io is mounted at /api/socket.io, so the /api/ prefix check
+  // above already excludes it — no separate substring check needed.
   if (url.pathname.startsWith("/api/")) return;
-  if (url.pathname.includes("socket.io")) return;
   if (url.pathname.endsWith("/sw-known-hashes.json")) return;
 
   // Runtime-proof carve-out. The /proof/runtime page must hash the bytes

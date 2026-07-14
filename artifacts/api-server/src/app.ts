@@ -7,6 +7,7 @@ import helmet from "helmet";
 import router from "./routes";
 import { httpAccessLogger } from "./lib/accessLog";
 import { isValidOnionHostname } from "./lib/torPosture";
+import { resolveAllowedOrigins } from "./lib/corsOrigins";
 
 const app: Express = express();
 
@@ -24,16 +25,7 @@ const app: Express = express();
 const trustProxyHops = Number(process.env["TRUST_PROXY_HOPS"] ?? "1");
 app.set("trust proxy", Number.isFinite(trustProxyHops) && trustProxyHops >= 0 ? trustProxyHops : 1);
 
-const allowedOrigins: string[] = [];
-const devDomain = process.env["REPLIT_DEV_DOMAIN"];
-const prodDomain = process.env["REPLIT_DOMAINS"];
-if (devDomain) allowedOrigins.push(`https://${devDomain}`);
-if (prodDomain) {
-  for (const d of prodDomain.split(",")) {
-    const trimmed = d.trim();
-    if (trimmed) allowedOrigins.push(`https://${trimmed}`);
-  }
-}
+const allowedOrigins = resolveAllowedOrigins();
 const isSelfHosted = process.env["SERVE_STATIC"] === "1";
 
 // HTTP security headers. Allow-lists below are sized to the actual
@@ -223,7 +215,11 @@ app.use((req, res, next) => {
 // security headers are present even on the 204 OPTIONS preflight that
 // the cors middleware short-circuits before reaching any downstream
 // handler. (Property #3 of the Task #256 regression test.)
-app.use(cors({ origin: allowedOrigins.length > 0 ? allowedOrigins : isSelfHosted ? true : false }));
+// CodeQL #11: never reflect arbitrary origins. When no origin can be
+// derived (fresh default self-host install), fail closed with `false` —
+// same-origin requests are not CORS requests, so the SPA served from
+// this very server keeps working; only cross-origin callers are refused.
+app.use(cors({ origin: allowedOrigins.length > 0 ? allowedOrigins : false }));
 
 app.use(express.json());
 app.use(express.urlencoded({ extended: true }));

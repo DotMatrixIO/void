@@ -428,7 +428,12 @@ function buildLNbitsAdapter(): LightningAdapter {
       }
       if (entry.paid) return true;
 
-      const res = await lightningFetch(`${url}/api/v1/payments/${paymentHash}`, {
+      // Defense in depth (CodeQL #12): the hostname is config-derived
+      // (LNBITS_URL env), so the path segment is the only user-influenced
+      // component of the outgoing URL. The route boundary already enforces
+      // a strict charset; encode here as well so no future caller can
+      // smuggle path-altering characters.
+      const res = await lightningFetch(`${url}/api/v1/payments/${encodeURIComponent(paymentHash)}`, {
         headers: { "X-Api-Key": apiKey },
       });
 
@@ -482,7 +487,10 @@ function buildBTCPayAdapter(): LightningAdapter {
       const invoiceId: string = data.id;
 
       const pmRes = await lightningFetch(
-        `${url}/api/v1/stores/${storeId}/invoices/${invoiceId}/payment-methods`,
+        // Defense in depth (CodeQL #12): hostname/store are config-derived
+        // (BTCPAY_URL / BTCPAY_STORE_ID env); encode the backend-issued
+        // invoice ID before interpolating it into the path.
+        `${url}/api/v1/stores/${storeId}/invoices/${encodeURIComponent(invoiceId)}/payment-methods`,
         {
           headers: { Authorization: `token ${apiKey}` },
         },
@@ -518,7 +526,11 @@ function buildBTCPayAdapter(): LightningAdapter {
       if (entry.paid) return true;
 
       const res = await lightningFetch(
-        `${url}/api/v1/stores/${storeId}/invoices/${paymentHash}`,
+        // Defense in depth (CodeQL #12): hostname/store are config-derived
+        // (BTCPAY_URL / BTCPAY_STORE_ID env), so the ID is the only
+        // user-influenced path component; the route boundary enforces a
+        // safe charset, and encoding here closes any future bypass.
+        `${url}/api/v1/stores/${storeId}/invoices/${encodeURIComponent(paymentHash)}`,
         {
           headers: { Authorization: `token ${apiKey}` },
         },

@@ -79,7 +79,11 @@ if (beginIdx !== -1 && endIdx !== -1 && endIdx > beginIdx) {
   updated =
     src.slice(0, beginIdx) +
     newBlock +
-    src.slice(endIdx + END_SENTINEL.length).replace(/^\n/, "\n");
+    // newBlock already ends with "\n"; the tail starts with the newline
+    // that followed END_SENTINEL in src, so strip it to avoid emitting a
+    // duplicate blank line. (CodeQL #3: the old form replaced "\n" with
+    // "\n" — a no-op that silently defeated this dedupe.)
+    src.slice(endIdx + END_SENTINEL.length).replace(/^\n/, "");
 } else {
   console.error(
     `[gen-og-rewrites] Could not find ${BEGIN_SENTINEL} / ${END_SENTINEL} ` +

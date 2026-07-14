@@ -29,6 +29,7 @@ import { evaluateLogRetention } from "./lib/logRetention";
 import { buildEffectiveConfigSummary } from "./lib/effectiveConfig";
 import { startPricingRefreshers } from "./services/pricing";
 import { lightningFetchTimeoutStartupLine } from "./services/lightning";
+import { resolveAllowedOrigins } from "./lib/corsOrigins";
 
 // Refuse to start if the configured TURN shared secret is one of the known
 // placeholder values shipped in the example config / docs. Running with the
@@ -186,21 +187,14 @@ if (Number.isNaN(port) || port <= 0) {
 
 const httpServer = createServer(app);
 
-const ALLOWED_ORIGINS: string[] = [];
-const devDomain = process.env["REPLIT_DEV_DOMAIN"];
-const prodDomain = process.env["REPLIT_DOMAINS"];
-if (devDomain) ALLOWED_ORIGINS.push(`https://${devDomain}`);
-if (prodDomain) {
-  for (const d of prodDomain.split(",")) {
-    const trimmed = d.trim();
-    if (trimmed) ALLOWED_ORIGINS.push(`https://${trimmed}`);
-  }
-}
+const ALLOWED_ORIGINS = resolveAllowedOrigins();
 
-const isSelfHosted = process.env["SERVE_STATIC"] === "1";
+// CodeQL #11: same fail-closed rule as the Express cors middleware in
+// app.ts — never reflect arbitrary origins; same-origin Socket.io
+// connections (the default self-host layout) are not CORS requests.
 const io = new SocketIOServer(httpServer, {
   cors: {
-    origin: ALLOWED_ORIGINS.length > 0 ? ALLOWED_ORIGINS : isSelfHosted ? true : false,
+    origin: ALLOWED_ORIGINS.length > 0 ? ALLOWED_ORIGINS : false,
     methods: ["GET", "POST"],
   },
   path: "/api/socket.io",

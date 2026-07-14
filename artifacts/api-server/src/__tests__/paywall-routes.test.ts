@@ -51,6 +51,66 @@ async function getJson(url: string): Promise<{ status: number; body: unknown }> 
   return { status: res.status, body: await res.json() };
 }
 
+describe("GET /paywall/status/:paymentHash ID validation (SSRF route boundary)", () => {
+  let httpServer: HttpServer;
+  let baseUrl: string;
+
+  beforeAll(async () => {
+    const app = express();
+    app.set("trust proxy", 1);
+    app.use(express.json());
+    app.use("/api", paywallRouter);
+    httpServer = createServer(app);
+    await new Promise<void>((resolve) => {
+      httpServer.listen(0, () => resolve());
+    });
+    const addr = httpServer.address();
+    const port = typeof addr === "object" && addr ? addr.port : 0;
+    baseUrl = `http://127.0.0.1:${port}`;
+  });
+
+  afterAll(async () => {
+    await new Promise<void>((r) => httpServer.close(() => r()));
+    delete process.env["LIGHTNING_BACKEND"];
+  });
+
+  it("rejects a traversal-style ID with 400 (default backend)", async () => {
+    delete process.env["LIGHTNING_BACKEND"];
+    // %2e%2e%2f decodes to ../ in the route param — must never reach the
+    // Lightning adapter's URL interpolation.
+    const res = await fetch(`${baseUrl}/api/paywall/status/%2e%2e%2fdev-pay%2fx`);
+    expect(res.status).toBe(400);
+  });
+
+  it("rejects a traversal-style ID with 400 under the BTCPay backend", async () => {
+    process.env["LIGHTNING_BACKEND"] = "btcpay";
+    const res = await fetch(`${baseUrl}/api/paywall/status/%2e%2e%2f%2e%2e%2fapi%2fv1%2fserver`);
+    expect(res.status).toBe(400);
+  });
+
+  it("rejects BTCPay IDs containing dots, slashes, or percent signs", async () => {
+    process.env["LIGHTNING_BACKEND"] = "btcpay";
+    for (const bad of [
+      "abc.def.ghi.jkl",
+      "abcdef%2fghijkl",
+      "abcde fghijklmn",
+      "short",
+      "a".repeat(65),
+    ]) {
+      const res = await fetch(`${baseUrl}/api/paywall/status/${encodeURIComponent(bad)}`);
+      expect(res.status, `expected 400 for ${JSON.stringify(bad)}`).toBe(400);
+    }
+  });
+
+  it("accepts a well-formed alphanumeric BTCPay invoice ID (not 400)", async () => {
+    process.env["LIGHTNING_BACKEND"] = "btcpay";
+    const res = await fetch(`${baseUrl}/api/paywall/status/AbCdEf123456_-X`);
+    // The mock pending map has no such invoice, so paid=false — but the ID
+    // itself must pass validation (i.e. anything except 400 is acceptable).
+    expect(res.status).not.toBe(400);
+  });
+});
+
 describe("POST /paywall/invoice tier validation", () => {
   let httpServer: HttpServer;
   let baseUrl: string;

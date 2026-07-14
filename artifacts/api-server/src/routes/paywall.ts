@@ -449,8 +449,15 @@ const statusHandler = async (
   const paymentHash = String(req.params["paymentHash"] ?? "");
 
   if (!paymentHash || !/^[0-9a-f]{64}$/i.test(paymentHash)) {
+    // BTCPay identifies invoices by an opaque store-generated ID rather
+    // than a 64-hex payment hash. Those IDs are alphanumeric (base58-ish),
+    // so enforce a strict safe-charset pattern instead of the old
+    // "any string ≥ 10 chars" fallback — this closes the SSRF route
+    // boundary (CodeQL #12): the value is interpolated into the backend
+    // URL path in services/lightning.ts, and this charset cannot contain
+    // `/`, `.`, `%`, or any other path-altering character.
     const isBTCPay = (process.env["LIGHTNING_BACKEND"] ?? "").toLowerCase() === "btcpay";
-    if (!isBTCPay || !paymentHash || paymentHash.length < 10) {
+    if (!isBTCPay || !/^[A-Za-z0-9_-]{10,64}$/.test(paymentHash)) {
       res.status(400).json({ error: "Invalid payment hash" });
       return;
     }

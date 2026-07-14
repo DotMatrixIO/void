@@ -119,6 +119,11 @@ router.get("/ice-servers", async (req, res) => {
     // Strip the brand only at the third-party `crypto.createHmac`
     // boundary; the credential output is sent inline in the response and
     // never re-compared on the server.
+    //
+    // HMAC-SHA1 is required by the TURN REST credential mechanism
+    // (coturn `static-auth-secret`) — a wire-interop requirement, not a
+    // choice. This is a short-lived credential MAC, not a hash of
+    // secret-at-rest data. See docs/security/codeql-dismissals.md (#14).
     const credential = crypto
       .createHmac("sha1", unwrapSecret(turnSecret))
       .update(username)
