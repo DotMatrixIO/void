@@ -297,17 +297,55 @@ afterEach(() => {
   hoisted.transport = null;
 });
 
-// Render the hook and advance fake timers until the initial join-room
-// ack has resolved (camera acquire + host-token load are async, then a
-// `latencyMs * 2` round-trip). Returns once `webrtcRef` is populated.
+// The REAL setTimeout, captured at module-evaluation time — before any
+// test installs fake timers. Used to yield a genuine macrotask so
+// promises that resolve off the JS thread (crypto.subtle HKDF in
+// `rendezvousJoinCandidates`, run on Node's threadpool) can settle while
+// fake timers are active. `vi.advanceTimersByTimeAsync` only flushes
+// microtasks between fake-timer firings, so without this yield the
+// setup() chain races the real threadpool and the join lands (or not)
+// nondeterministically — the root cause of the historical flake here.
+const realSetTimeout = globalThis.setTimeout;
+function yieldRealMacrotask(): Promise<void> {
+  return new Promise((resolve) => realSetTimeout(resolve, 0));
+}
+
+// Interleave real-macrotask yields with fake-timer advancement until
+// `predicate()` holds. Deterministic: the fake clock only ever advances
+// in fixed steps, and the loop stops the moment the condition is met.
+async function pumpUntil(
+  predicate: () => boolean,
+  { stepMs = 50, maxSteps = 400 }: { stepMs?: number; maxSteps?: number } = {},
+): Promise<void> {
+  for (let i = 0; i < maxSteps; i++) {
+    // Let threadpool-backed promises (crypto.subtle) settle first.
+    await yieldRealMacrotask();
+    await yieldRealMacrotask();
+    if (predicate()) return;
+    await vi.advanceTimersByTimeAsync(stepMs);
+  }
+  await yieldRealMacrotask();
+  if (!predicate()) {
+    throw new Error(
+      `pumpUntil: condition not met after ${maxSteps} steps of ${stepMs}ms fake time`,
+    );
+  }
+}
+
+// Render the hook and pump until the initial join-room ack has resolved
+// (camera acquire + host-token load + HKDF handle derivation are async,
+// then a `latencyMs * 2` round-trip). Returns once `webrtcRef` is
+// populated and the peer list has been applied.
 async function joinInitial(
   harness: ReturnType<typeof makeOptions>,
   transport: MockSocketTransport,
 ) {
   renderHook(() => useRoomConnection(harness.options));
-  // Flush the async setup() chain (acquire → fetch → loadHostToken) and
-  // the join-room round-trip (latencyMs * 2), with margin.
-  await vi.advanceTimersByTimeAsync(transport.latencyMs * 2 + 500);
+  await pumpUntil(() => harness.media.webrtcRef.current !== null, {
+    // Step small relative to the join round-trip so we never overshoot
+    // meaningfully, but bound total fake time well past latencyMs * 2.
+    stepMs: Math.max(50, Math.ceil(transport.latencyMs / 10)),
+  });
 }
 
 describe("useRoomConnection — Tor reconnect budget", () => {

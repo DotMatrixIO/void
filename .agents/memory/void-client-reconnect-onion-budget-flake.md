@@ -1,17 +1,15 @@
 ---
-name: useRoomConnection reconnect ONION-budget flake
-description: A timing-sensitive void-client test that fails intermittently in the full suite, unrelated to UI/copy diffs.
+name: useRoomConnection reconnect ONION-budget flake (RESOLVED)
+description: Formerly-flaky void-client reconnect test — fixed July 2026; failures here are now real.
 ---
 
-`src/hooks/useRoomConnection.reconnect.test.tsx` → "rejoins within the ONION
-budget under high latency + multiple failed attempts" fails intermittently
-(9 passed / 1 failed) both in the full suite and in isolation. It is a
-timing/latency-budget assertion around Tor reconnect backoff.
+**RESOLVED (July 2026).** The intermittent failures in
+`src/hooks/useRoomConnection.reconnect.test.tsx` were a fake-timer vs
+`crypto.subtle` threadpool race in the test harness, fixed by a
+real-macrotask-yielding `pumpUntil` helper in the file (verified green
+10/10 consecutive isolated runs).
 
-**Why:** it depends on wall-clock-ish reconnect budgeting under simulated high
-latency, which is fragile under container load.
-
-**How to apply:** if you are doing a copy/UI/palette-only change and this is
-the ONLY red test, it is not yours — do not chase it. Scope-test your own
-files; treat this as a pre-existing flake and note it in
-`skip_validation_reason`.
+**How to apply:** do NOT treat failures in this file as a known flake or
+note them in `skip_validation_reason` anymore — a red here is a genuine
+regression. Details of the fix pattern:
+`void-client-reconnect-test-prefailing.md`.

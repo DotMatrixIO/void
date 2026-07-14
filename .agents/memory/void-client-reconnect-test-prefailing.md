@@ -1,23 +1,23 @@
 ---
-name: void-client reconnect test is env-blocked, not a regression
-description: why the useRoomConnection ONION-budget reconnect test can be red in-container yet green in CI
+name: void-client reconnect test flake — FIXED via real-macrotask pump
+description: the useRoomConnection reconnect test's fake-timer/crypto.subtle race and the pump pattern that fixed it
 ---
 
-`src/hooks/useRoomConnection.reconnect.test.tsx > "rejoins within the ONION budget
-under high latency + multiple failed attempts"` can fail with `expected null not to be
-null` at `harness.media.webrtcRef.current` right after `joinInitial(...)`.
+**Status (July 2026): FIXED.** `src/hooks/useRoomConnection.reconnect.test.tsx` was
+nondeterministically red (ONION-budget, knock-approved, duplicate-tiles — all funnel
+through `joinInitial`). Root cause: the hook's join path awaits `crypto.subtle`
+HKDF (`rendezvousJoinCandidates`), which resolves on Node's threadpool (a real
+macrotask), while the tests pumped only fake timers + microtasks
+(`vi.advanceTimersByTimeAsync`). Whether the HKDF promise settled before the pump
+finished was a real-thread race.
 
-**Rule:** treat this failure as environment-blocked, not a code regression, when the
-container's Node differs from the repo's pinned version (look for `WARN Unsupported
-engine`). Its join path uses `crypto.subtle` (HKDF), which resolves on a real macrotask;
-under Node-version skew the microtask-oriented test harness observes `webrtcRef` before
-it is set. CI runs the pinned Node, so it is green there.
+**Fix pattern (reusable):** capture the REAL `setTimeout` at module-evaluation time
+(before any `vi.useFakeTimers()`), then pump with a loop that interleaves
+`await new Promise(r => realSetTimeout(r, 0))` yields (lets threadpool promises
+settle) with small `vi.advanceTimersByTimeAsync(step)` advances, until a predicate
+holds (e.g. `webrtcRef.current !== null`). See `pumpUntil` in the test file.
 
-**Why:** same family as the jsdom Ed25519 env failures — a runtime-capability/timing
-mismatch, not a logic bug.
-
-**How to apply:** if void-client-tests is red ONLY on this test (plus the standard jsdom
-"getContext()/navigation/scrollTo not implemented" noise), do NOT attribute it to a
-CI-YAML/README/docs-only diff — that surface cannot touch void-client runtime. Scope-test
-your own file and skip this. A genuine fix belongs to the reconnect/crypto owner, not a
-build-wiring or CI task.
+**How to apply:** if this file goes red again, it is a real regression — do NOT
+dismiss it as env-blocked/pre-existing anymore. When any fake-timer test starts
+awaiting `crypto.subtle` (or other threadpool-backed) work, use the same
+captured-real-setTimeout pump instead of a fixed `advanceTimersByTimeAsync` margin.
