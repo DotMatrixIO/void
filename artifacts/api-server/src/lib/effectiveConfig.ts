@@ -263,6 +263,53 @@ export function buildNtfyPartialWarning(
   ].join("\n");
 }
 
+/**
+ * Boxed warning for a malformed NTFY_SERVER value: set, but not parseable as
+ * an http(s) URL (missing scheme, wrong scheme, trailing garbage). publishNtfy()
+ * swallows fetch errors by design, so a bad server URL fails silently at alert
+ * time — every operator alert is dropped with only a warn-level log line.
+ * The server URL is not a secret, so the offending value is echoed to make the
+ * fix obvious; the topic and token are never echoed. Returns null when
+ * NTFY_SERVER is unset or parses as a valid http(s) URL.
+ */
+export function buildNtfyServerUrlWarning(
+  env: NodeJS.ProcessEnv = process.env,
+): string | null {
+  const raw = env["NTFY_SERVER"];
+  if (!describePresence(raw)) return null;
+  const value = (raw as string).trim();
+
+  let parsed: URL | null = null;
+  try {
+    parsed = new URL(value);
+  } catch {
+    parsed = null;
+  }
+  if (parsed && (parsed.protocol === "http:" || parsed.protocol === "https:")) {
+    return null;
+  }
+
+  const reason = parsed
+    ? `uses the unsupported scheme "${parsed.protocol.replace(/:$/, "")}"`
+    : "is not a parseable URL (missing scheme?)";
+
+  return [
+    "",
+    "==============================================================================",
+    "  NTFY_SERVER IS NOT A VALID URL — operator alerts will NOT be sent",
+    "------------------------------------------------------------------------------",
+    `  NTFY_SERVER is set to "${value}", which ${reason}.`,
+    "  Alert publishing swallows transport errors by design, so every operator",
+    "  alert (CSP-violation waves, Lightning backend shape changes, repeated",
+    "  payment-service slowness) will fail silently at send time.",
+    '  To fix: set NTFY_SERVER to a full http(s) URL, e.g. "https://ntfy.sh"',
+    "  or your self-hosted server's base URL, or unset it to use the default.",
+    "  See README-selfhost.md.",
+    "==============================================================================",
+    "",
+  ].join("\n");
+}
+
 function describePaywallSecret(env: NodeJS.ProcessEnv): string {
   return describePresence(env["PAYWALL_SECRET"])
     ? "set (operator-provided)"

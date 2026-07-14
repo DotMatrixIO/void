@@ -33,6 +33,7 @@ import {
   buildOnionHostnameRejectedWarning,
   buildCloudflareTurnPartialWarning,
   buildNtfyPartialWarning,
+  buildNtfyServerUrlWarning,
 } from "./lib/effectiveConfig";
 import { startPricingRefreshers } from "./services/pricing";
 import { lightningFetchTimeoutStartupLine } from "./services/lightning";
@@ -239,6 +240,17 @@ logger.info(buildEffectiveConfigSummary());
   const ntfyWarning = buildNtfyPartialWarning();
   if (ntfyWarning) {
     logger.warn(ntfyWarning);
+  }
+}
+
+// Malformed NTFY_SERVER guard: publishNtfy() swallows fetch errors by design,
+// so a server URL that cannot work (missing scheme, wrong scheme) fails
+// silently at alert time. The server URL is not a secret and is echoed;
+// topic/token are never echoed.
+{
+  const ntfyServerWarning = buildNtfyServerUrlWarning();
+  if (ntfyServerWarning) {
+    logger.warn(ntfyServerWarning);
   }
 }
 

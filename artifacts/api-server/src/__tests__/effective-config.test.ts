@@ -7,6 +7,7 @@ import {
   buildOnionHostnameRejectedWarning,
   buildCloudflareTurnPartialWarning,
   buildNtfyPartialWarning,
+  buildNtfyServerUrlWarning,
 } from "../lib/effectiveConfig";
 import {
   resolveAllowedOrigins,
@@ -528,5 +529,63 @@ describe("buildNtfyPartialWarning", () => {
     expect(out).toContain(
       "NTFY_SERVER and NTFY_TOKEN are set, but NTFY_TOPIC is not",
     );
+  });
+});
+
+describe("buildNtfyServerUrlWarning", () => {
+  it("stays quiet when NTFY_SERVER is unset", () => {
+    expect(buildNtfyServerUrlWarning({})).toBeNull();
+  });
+
+  it("treats a whitespace-only value as unset", () => {
+    expect(buildNtfyServerUrlWarning({ NTFY_SERVER: "  " })).toBeNull();
+  });
+
+  it("stays quiet for valid http(s) URLs", () => {
+    expect(
+      buildNtfyServerUrlWarning({ NTFY_SERVER: "https://ntfy.sh" }),
+    ).toBeNull();
+    expect(
+      buildNtfyServerUrlWarning({ NTFY_SERVER: "http://ntfy.internal:8080" }),
+    ).toBeNull();
+    expect(
+      buildNtfyServerUrlWarning({ NTFY_SERVER: "https://ntfy.example.com/" }),
+    ).toBeNull();
+  });
+
+  it("warns on a scheme-less value, echoing the value", () => {
+    const out = buildNtfyServerUrlWarning({ NTFY_SERVER: "ntfy.example.com" });
+    expect(out).not.toBeNull();
+    expect(out).toContain("NTFY_SERVER IS NOT A VALID URL");
+    expect(out).toContain('"ntfy.example.com"');
+    expect(out).toContain("not a parseable URL");
+  });
+
+  it("warns on a non-http(s) scheme, naming the scheme", () => {
+    const out = buildNtfyServerUrlWarning({
+      NTFY_SERVER: "ftp://ntfy.example.com",
+    });
+    expect(out).not.toBeNull();
+    expect(out).toContain('unsupported scheme "ftp"');
+    expect(out).toContain('"ftp://ntfy.example.com"');
+  });
+
+  it("warns on unparseable garbage", () => {
+    const out = buildNtfyServerUrlWarning({
+      NTFY_SERVER: "https:// not a url",
+    });
+    expect(out).not.toBeNull();
+    expect(out).toContain("NTFY_SERVER IS NOT A VALID URL");
+  });
+
+  it("never echoes topic or token even when they are also set", () => {
+    const out = buildNtfyServerUrlWarning({
+      NTFY_SERVER: "ntfy.example.com",
+      NTFY_TOPIC: "secret-topic-value",
+      NTFY_TOKEN: "secret-token-value",
+    });
+    expect(out).not.toBeNull();
+    expect(out).not.toContain("secret-topic-value");
+    expect(out).not.toContain("secret-token-value");
   });
 });
