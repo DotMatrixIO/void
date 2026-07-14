@@ -1,0 +1,104 @@
+@import url('https://fonts.googleapis.com/css2?family=Staatliches&family=JetBrains+Mono:wght@400;700&family=Source+Serif+4:ital,wght@0,400;0,700;1,400&display=swap');
+
+/* ── Gold Voyager palette (copied from artifacts/void-client/src/index.css) ── */
+.void-landing-root {
+  --bg: #D3CABA;
+  --haze-alpha: 0;
+  --haze-blur: 3px;
+  --surface: #A89E90;
+  --surface-dark: #14110D;
+  --fg: #1E1A14;
+  --fg-on-dark: #F2EEE6;
+  --fg-dim: #352D20;
+  --red: #CC2200;
+  --teal: #0D9D8B;
+  --gold: #E8A200;
+  --burnt: #C85A00;
+  --scrim: rgba(10, 9, 8, 0.85);
+  --font-mono: 'JetBrains Mono', 'Courier New', monospace;
+  --font-body: 'Source Serif 4', Georgia, serif;
+
+  /* body background color / concrete texture applied to the component root
+     (the real app paints this on <body>; the LandingPage root is transparent). */
+  font-family: var(--font-mono);
+  background-color: var(--bg);
+  background-image:
+    linear-gradient(rgba(211, 202, 186, 0.88), rgba(211, 202, 186, 0.88)),
+    url('/__mockup/images/concrete.jpeg');
+  background-size: auto, 640px auto;
+  background-repeat: repeat;
+  color: var(--fg);
+  min-height: 100svh;
+}
+
+.void-landing-root * {
+  box-sizing: border-box;
+  border-radius: 0 !important;
+}
+
+.void-landing-root img {
+  image-rendering: pixelated;
+  image-rendering: crisp-edges;
+}
+
+/* ── Void button ── */
+.void-landing-root .void-btn {
+  font-family: var(--font-mono);
+  font-size: 16px;
+  font-weight: 700;
+  letter-spacing: 1px;
+  text-transform: uppercase;
+  cursor: pointer;
+  padding: 12px 20px;
+  background: transparent;
+  color: var(--fg);
+  border: 3px solid var(--fg);
+  transition: background 0.08s, color 0.08s;
+  -webkit-tap-highlight-color: transparent;
+  user-select: none;
+}
+
+.void-landing-root .void-btn:active {
+  opacity: 0.8;
+}
+
+.void-landing-root .void-btn--red {
+  border-color: var(--red);
+  color: var(--fg);
+}
+.void-landing-root .void-btn--red:hover,
+.void-landing-root .void-btn--red.active {
+  background: var(--red);
+  color: #FFFFFF;
+}
+
+.void-landing-root .void-btn--teal {
+  border-color: var(--teal);
+  color: var(--fg);
+}
+.void-landing-root .void-btn--teal:hover,
+.void-landing-root .void-btn--teal.active {
+  background: var(--teal);
+  color: var(--fg);
+}
+
+.void-landing-root .void-btn--gold {
+  border-color: var(--gold);
+  color: var(--fg);
+}
+.void-landing-root .void-btn--gold:hover,
+.void-landing-root .void-btn--gold.active {
+  background: var(--gold);
+  color: var(--fg);
+}
+
+/* ── Landing background haze ── */
+.void-landing-root .landing-haze {
+  position: absolute;
+  inset: 0;
+  z-index: 50;
+  pointer-events: none;
+  background: color-mix(in srgb, var(--bg) calc(var(--haze-alpha) * 100%), transparent);
+  -webkit-backdrop-filter: blur(var(--haze-blur));
+  backdrop-filter: blur(var(--haze-blur));
+}

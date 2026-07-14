@@ -1,0 +1,33 @@
+@import url('https://fonts.googleapis.com/css2?family=Syne:wght@400;600;700;800&family=Space+Mono:ital,wght@0,400;0,700;1,400&display=swap');
+
+.brutalista-root {
+  --brutal-paper: #F6F1EA;
+  --brutal-red: #E63925;
+  --brutal-teal: #084042;
+  --brutal-green: #1B452B;
+  --brutal-black: #1A1A1A;
+  --brutal-pink: #F3A6B4;
+  --brutal-orange: #E67E22;
+}
+
+.brutalista-root .font-syne { font-family: 'Syne', sans-serif; }
+.brutalista-root .font-space { font-family: 'Space Mono', monospace; }
+
+.brutalista-root .bg-brutal-paper { background-color: var(--brutal-paper); }
+.brutalista-root .bg-brutal-red { background-color: var(--brutal-red); }
+.brutalista-root .bg-brutal-teal { background-color: var(--brutal-teal); }
+.brutalista-root .bg-brutal-green { background-color: var(--brutal-green); }
+.brutalista-root .bg-brutal-black { background-color: var(--brutal-black); }
+.brutalista-root .bg-brutal-pink { background-color: var(--brutal-pink); }
+.brutalista-root .bg-brutal-orange { background-color: var(--brutal-orange); }
+
+.brutalista-root .text-brutal-paper { color: var(--brutal-paper); }
+.brutalista-root .text-brutal-red { color: var(--brutal-red); }
+.brutalista-root .text-brutal-teal { color: var(--brutal-teal); }
+.brutalista-root .text-brutal-green { color: var(--brutal-green); }
+.brutalista-root .text-brutal-black { color: var(--brutal-black); }
+.brutalista-root .text-brutal-pink { color: var(--brutal-pink); }
+
+.brutalista-root .border-brutal-black { border-color: var(--brutal-black); }
+.brutalista-root .border-brutal-red { border-color: var(--brutal-red); }
+.brutalista-root .border-brutal-teal { border-color: var(--brutal-teal); }
