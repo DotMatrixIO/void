@@ -20,6 +20,7 @@
     "check:biometric-poster-drift": "node scripts/check-biometric-poster-drift.mjs",
     "update:biometric-poster": "node scripts/check-biometric-poster-drift.mjs --update-reference",
     "check:og-routes": "node scripts/check-og-routes-parity.mjs",
+    "check:compare-counts": "node scripts/check-compare-counts.mjs",
     "check:routes-overview": "node scripts/check-routes-overview-drift.mjs",
     "check:nav-routes": "node scripts/check-nav-routes-drift.mjs",
     "check:fragments-sync": "node scripts/check-fragments-sync.mjs",
