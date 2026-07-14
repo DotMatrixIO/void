@@ -14,7 +14,7 @@
 // token is shown by its last-4 suffix only, matching the existing ICE banner.
 
 import { isTorOnly, turnUrlTerminatesOverTor } from "./torOnly";
-import { resolveAllowedOrigins } from "./corsOrigins";
+import { resolveAllowedOrigins, rejectedPublicOrigin } from "./corsOrigins";
 import { cloudflareCredsConfigured, tokenIdSuffix } from "./cloudflareTurn";
 import { describeLogRetention } from "./logRetention";
 import { lightningConfigSummary } from "../services/lightning";
@@ -113,6 +113,37 @@ export function buildCorsMisconfigWarning(
     "  https://your-domain.example) in the runtime env. See README-selfhost.md §5.",
     "  If this server DOES serve the frontend, set SERVE_STATIC=1 instead —",
     "  same-origin requests are not CORS requests and need no allowlist entry.",
+    "==============================================================================",
+    "",
+  ].join("\n");
+}
+
+/**
+ * Boxed warning for a set-but-rejected PUBLIC_ORIGIN. resolveAllowedOrigins()
+ * silently drops a malformed or non-http(s) value rather than widening the
+ * allowlist — correct, but confusing: the operator believes they configured
+ * split-origin CORS while the allowlist stays empty. This banner names the
+ * rejected value, the reason, and the expected shape (https://host) so the
+ * symptom becomes a one-line fix. Returns null when PUBLIC_ORIGIN is unset,
+ * empty, or valid.
+ */
+export function buildPublicOriginRejectedWarning(
+  env: NodeJS.ProcessEnv = process.env,
+): string | null {
+  const rejected = rejectedPublicOrigin(env);
+  if (!rejected) return null;
+
+  return [
+    "",
+    "==============================================================================",
+    "  PUBLIC_ORIGIN SET BUT REJECTED — it will NOT be added to the CORS allowlist",
+    "------------------------------------------------------------------------------",
+    `  Rejected value: ${rejected.value}`,
+    `  Reason:         ${rejected.reason}`,
+    "  Expected format: a full origin with an http(s) scheme and no path, e.g.",
+    "  https://void.example.com",
+    "  Until this is fixed the value is ignored, so cross-origin browser requests",
+    "  from your client origin will be blocked. See README-selfhost.md §5.",
     "==============================================================================",
     "",
   ].join("\n");

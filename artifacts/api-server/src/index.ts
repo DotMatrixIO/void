@@ -29,6 +29,7 @@ import { evaluateLogRetention } from "./lib/logRetention";
 import {
   buildEffectiveConfigSummary,
   buildCorsMisconfigWarning,
+  buildPublicOriginRejectedWarning,
 } from "./lib/effectiveConfig";
 import { startPricingRefreshers } from "./services/pricing";
 import { lightningFetchTimeoutStartupLine } from "./services/lightning";
@@ -185,6 +186,20 @@ logger.info(buildEffectiveConfigSummary());
   const corsWarning = buildCorsMisconfigWarning();
   if (corsWarning) {
     logger.warn(corsWarning);
+  }
+}
+
+// PUBLIC_ORIGIN rejection guard (Task: tell self-hosters when PUBLIC_ORIGIN
+// is malformed instead of silently ignoring it). resolveAllowedOrigins()
+// drops a malformed or non-http(s) PUBLIC_ORIGIN rather than widening the
+// allowlist; without this banner the only symptom is the generic
+// empty-allowlist warning above, which does not say WHY. This one names the
+// rejected value and the expected shape (https://host). See
+// lib/effectiveConfig.ts and README-selfhost.md §5.
+{
+  const publicOriginWarning = buildPublicOriginRejectedWarning();
+  if (publicOriginWarning) {
+    logger.warn(publicOriginWarning);
   }
 }
 

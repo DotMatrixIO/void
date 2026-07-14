@@ -3,7 +3,12 @@ import { describe, it, expect } from "vitest";
 import {
   buildEffectiveConfigSummary,
   buildCorsMisconfigWarning,
+  buildPublicOriginRejectedWarning,
 } from "../lib/effectiveConfig";
+import {
+  resolveAllowedOrigins,
+  rejectedPublicOrigin,
+} from "../lib/corsOrigins";
 import { describeLogRetention } from "../lib/logRetention";
 import {
   configuredLightningBackend,
@@ -281,5 +286,76 @@ describe("buildCorsMisconfigWarning", () => {
   it("still warns when PUBLIC_ORIGIN is set but malformed", () => {
     const out = buildCorsMisconfigWarning({ PUBLIC_ORIGIN: "not-a-url" });
     expect(out).not.toBeNull();
+  });
+});
+
+describe("rejectedPublicOrigin", () => {
+  it("returns null when PUBLIC_ORIGIN is unset or empty", () => {
+    expect(rejectedPublicOrigin({})).toBeNull();
+    expect(rejectedPublicOrigin({ PUBLIC_ORIGIN: "   " })).toBeNull();
+  });
+
+  it("returns null for a valid https origin", () => {
+    expect(
+      rejectedPublicOrigin({ PUBLIC_ORIGIN: "https://void.example.com" }),
+    ).toBeNull();
+  });
+
+  it("flags a scheme-less value as unparseable", () => {
+    const out = rejectedPublicOrigin({ PUBLIC_ORIGIN: "void.example.com" });
+    expect(out).not.toBeNull();
+    expect(out!.value).toBe("void.example.com");
+    expect(out!.reason).toContain("scheme is required");
+  });
+
+  it("flags a non-http(s) scheme by name", () => {
+    const out = rejectedPublicOrigin({
+      PUBLIC_ORIGIN: "ftp://void.example.com",
+    });
+    expect(out).not.toBeNull();
+    expect(out!.reason).toContain('unsupported scheme "ftp"');
+  });
+
+  it("does not change the allowlist behaviour — rejected values stay dropped", () => {
+    expect(
+      resolveAllowedOrigins({ PUBLIC_ORIGIN: "void.example.com" }),
+    ).toEqual([]);
+    expect(
+      resolveAllowedOrigins({ PUBLIC_ORIGIN: "https://void.example.com" }),
+    ).toEqual(["https://void.example.com"]);
+  });
+});
+
+describe("buildPublicOriginRejectedWarning", () => {
+  it("stays quiet when PUBLIC_ORIGIN is unset", () => {
+    expect(buildPublicOriginRejectedWarning({})).toBeNull();
+  });
+
+  it("stays quiet for a valid PUBLIC_ORIGIN", () => {
+    expect(
+      buildPublicOriginRejectedWarning({
+        PUBLIC_ORIGIN: "https://void.example.com",
+      }),
+    ).toBeNull();
+  });
+
+  it("names the rejected value and the expected format for a scheme-less value", () => {
+    const out = buildPublicOriginRejectedWarning({
+      PUBLIC_ORIGIN: "void.example.com",
+    });
+    expect(out).not.toBeNull();
+    expect(out).toContain("PUBLIC_ORIGIN SET BUT REJECTED");
+    expect(out).toContain("Rejected value: void.example.com");
+    expect(out).toContain("scheme is required");
+    expect(out).toContain("https://void.example.com");
+    expect(out).toContain("README-selfhost.md §5");
+  });
+
+  it("names the offending scheme for a non-http(s) value", () => {
+    const out = buildPublicOriginRejectedWarning({
+      PUBLIC_ORIGIN: "ftp://void.example.com",
+    });
+    expect(out).not.toBeNull();
+    expect(out).toContain('unsupported scheme "ftp"');
   });
 });
