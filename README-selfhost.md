@@ -1586,6 +1586,16 @@ Expose both:
 - UDP TURN if possible
 - TLS TURN on 5349/tcp
 
+### Startup Misconfiguration Banners
+
+The server prints a boxed warning banner at startup when it detects a likely misconfiguration. If you see one of these in `docker compose logs -f void`, the fix is one line:
+
+- **`CORS ALLOWLIST EMPTY IN SPLIT-ORIGIN MODE`** — `SERVE_STATIC` is unset (so this server is not serving the frontend) but no allowed origin could be derived, so every cross-origin browser request will be blocked. Fix: set `PUBLIC_ORIGIN` to the client's origin (see §5), or set `SERVE_STATIC=1` if this server does serve the frontend.
+- **`PUBLIC_ORIGIN SET BUT REJECTED`** — the value you set failed validation (missing http(s) scheme, or has a path) and is silently dropped from the CORS allowlist. Fix: use a full origin with a scheme and no path, e.g. `https://void.example.com`.
+- **`ONION_HOSTNAME SET BUT REJECTED`** — the value is not a valid v3 onion address, so it is dropped from the CORS allowlist and the `Onion-Location` header is never emitted (Tor Browser users are never told the mirror exists). Fix: use the bare v3 hostname — exactly 56 base32 characters (`a–z`, `2–7`) followed by `.onion`, with no scheme, port, or path.
+- **`CLOUDFLARE TURN HALF-CONFIGURED`** — only one of `CLOUDFLARE_TURN_TOKEN_ID` / `CLOUDFLARE_TURN_API_TOKEN` is set; the pair is ignored and the server falls back to the next ICE option. Fix: set the missing variable (see §4), or unset the present one if Cloudflare TURN is not intended.
+- **`NTFY ALERTING HALF-CONFIGURED`** — `NTFY_SERVER` and/or `NTFY_TOKEN` is set but `NTFY_TOPIC` is not, so alert publishing is a silent no-op. Fix: set `NTFY_TOPIC` (see the ntfy table in §5), or unset the other ntfy variables if alerting is not intended.
+
 ### Useful Commands
 
 ```bash

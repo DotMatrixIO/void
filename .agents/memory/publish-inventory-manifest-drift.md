@@ -11,8 +11,11 @@ still reports two findings, and both are **genuine**, not empty-index artifacts:
   (`attached_assets/Pasted-...*.txt`) was committed before the exclusion and stays
   tracked, so `attached_assets` shows up as a tracked top-level entry the manifest
   never classifies. The recovery task explicitly permits keeping that one `.txt`.
-- **STALE `replit.nix`** — `replit.nix` is in the manifest STRIP list but the file
-  does not exist on disk in this tree at all (not merely hidden by an empty index).
+- **`replit.nix`** — RESOLVED July 2026: installing any Nix system dependency
+  regenerates a top-level `replit.nix`, which trips the fail-closed inventory as
+  UNCLASSIFIED; it is now permanently classified STRIP in the manifest (the §3
+  scrub already `rm -f`s it). If it goes STALE again (absent from tree), that
+  just means no system deps are installed — safe to leave in STRIP.
 
 **Why:** how to tell genuine drift from the empty-index artifact — with an empty
 index every manifest entry reports STALE; once the tree is fully tracked, only
