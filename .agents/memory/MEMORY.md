@@ -69,4 +69,5 @@
 - [useRoomConnection reconnect ONION-budget flake](void-client-reconnect-onion-budget-flake.md) — timing test fails ~1/10 in full+isolated runs; if it is the ONLY red on a copy/UI diff, it is not yours.
 - [publish-inventory manifest drift](publish-inventory-manifest-drift.md) — post full-tree recovery, UNCLASSIFIED attached_assets (legacy tracked .txt) + STALE replit.nix (absent from tree) are GENUINE drift, not empty-index artifacts; owned by publish/manifest task, not recovery.
 - [ink-surface invisibility scan](ink-surface-scan.md) — check:ink-surface fails NEW sub-3.0:1 color/background pairings (both dark-on-dark & light-on-light); baseline ratchet grandfathers ~50; never regen to absorb new offenders.
+- [Smoke-spawned api-server writes repo-root data/](smoke-server-cwd-state.md) — set ROOM_STATE_FILE to tmp when spawning the built server or a stray data/ dir auto-commits and trips publish-inventory.
 - [VOID self-host LNbits over Tailscale](void-selfhost-lnbits-tailscale.md) — Start9 LNbits: NOT a raw 100.x IP (StartOS routes by SNI/Host on 443); use https://<hostname>+extra_hosts+StartOS CA; test with node -e not wget.

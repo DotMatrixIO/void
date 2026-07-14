@@ -6,6 +6,15 @@
 // a deep path. Guards against regressions like the Express 5 /
 // path-to-regexp v8 rejection of bare `app.get("*", ...)` that would
 // crash the production container at startup.
+//
+// Also exercises the fail-closed CORS allowlist (CodeQL #11) end-to-end
+// in the self-host layout:
+//  - Phase 1 (default install, no PUBLIC_ORIGIN): same-origin requests
+//    (no Origin header) work; a foreign Origin gets no
+//    Access-Control-Allow-Origin header (browser blocks it).
+//  - Phase 2 (split-origin install, PUBLIC_ORIGIN set): the configured
+//    origin is echoed back in Access-Control-Allow-Origin; a foreign
+//    Origin is still rejected.
 
 import { spawn } from "node:child_process";
 import { mkdtempSync, mkdirSync, writeFileSync, rmSync } from "node:fs";
@@ -82,14 +91,21 @@ async function killChild(child) {
   });
 }
 
-async function main() {
-  const clientDist = mkdtempSync(path.join(tmpdir(), "smoke-client-dist-"));
-  writeFileSync(path.join(clientDist, "index.html"), INDEX_SENTINEL);
-  mkdirSync(path.join(clientDist, "assets"));
-  writeFileSync(path.join(clientDist, "assets", "app.js"), "/* asset */");
+async function fetchCors(port, p, origin) {
+  const headers = origin ? { Origin: origin } : {};
+  const res = await fetch(`http://127.0.0.1:${port}${p}`, { headers });
+  await res.text();
+  return {
+    status: res.status,
+    allowOrigin: res.headers.get("access-control-allow-origin"),
+  };
+}
 
+const FOREIGN_ORIGIN = "https://evil.example";
+const SPLIT_ORIGIN = "https://client.split-origin.example";
+
+async function withServer(extraEnv, clientDist, fn) {
   const port = await pickPort();
-
   log(`spawning ${distEntry} on PORT=${port} CLIENT_DIST=${clientDist}`);
   const child = spawn(process.execPath, ["--enable-source-maps", distEntry], {
     env: {
@@ -103,46 +119,121 @@ async function main() {
       // random hex (or leaving unset) keeps startup green.
       TURN_SECRET: "",
       PAYWALL_SECRET: "",
+      // Keep room-state persistence out of the repo tree: the server
+      // defaults ROOM_STATE_FILE to data/rooms.json relative to its cwd,
+      // which would leave a stray top-level data/ dir behind (and trip
+      // the publish-inventory guard).
+      ROOM_STATE_FILE: path.join(clientDist, "rooms.json"),
+      // Simulate a bare self-host install: no Replit domains, no onion
+      // mirror, no PUBLIC_ORIGIN unless a phase sets one explicitly. This
+      // is what makes the fail-closed CORS assertions meaningful.
+      REPLIT_DEV_DOMAIN: "",
+      REPLIT_DOMAINS: "",
+      PUBLIC_ORIGIN: "",
+      ONION_HOSTNAME: "",
+      ...extraEnv,
     },
     stdio: ["ignore", "pipe", "pipe"],
   });
 
-  let failed = false;
   try {
     await waitForListening(child, 15000);
+    await fn(port);
+  } finally {
+    await killChild(child);
+  }
+}
 
-    const checks = [
-      { path: "/", name: "root" },
-      { path: "/compare", name: "spa-deep-path" },
-      { path: "/some/nested/route", name: "spa-nested" },
-    ];
-    for (const c of checks) {
-      const r = await fetchPath(port, c.path);
-      if (r.status !== 200) {
-        throw new Error(`${c.name} (${c.path}): expected status 200, got ${r.status}`);
-      }
-      if (!r.body.includes("SMOKE-OK")) {
-        throw new Error(
-          `${c.name} (${c.path}): expected body to include SPA index sentinel "SMOKE-OK", got: ${r.body.slice(0, 200)}`,
-        );
-      }
-      if (!r.contentType || !r.contentType.includes("text/html")) {
-        throw new Error(`${c.name} (${c.path}): expected text/html content-type, got ${r.contentType}`);
-      }
-      log(`OK ${c.name} ${c.path} -> 200 text/html`);
+async function runSpaChecks(port) {
+  const checks = [
+    { path: "/", name: "root" },
+    { path: "/compare", name: "spa-deep-path" },
+    { path: "/some/nested/route", name: "spa-nested" },
+  ];
+  for (const c of checks) {
+    const r = await fetchPath(port, c.path);
+    if (r.status !== 200) {
+      throw new Error(`${c.name} (${c.path}): expected status 200, got ${r.status}`);
     }
+    if (!r.body.includes("SMOKE-OK")) {
+      throw new Error(
+        `${c.name} (${c.path}): expected body to include SPA index sentinel "SMOKE-OK", got: ${r.body.slice(0, 200)}`,
+      );
+    }
+    if (!r.contentType || !r.contentType.includes("text/html")) {
+      throw new Error(`${c.name} (${c.path}): expected text/html content-type, got ${r.contentType}`);
+    }
+    log(`OK ${c.name} ${c.path} -> 200 text/html`);
+  }
 
-    const apiHealth = await fetchPath(port, "/api/healthz").catch(() => null);
-    if (apiHealth && apiHealth.body.includes("SMOKE-OK")) {
-      throw new Error("/api/* path was incorrectly served by the SPA catch-all");
-    }
+  const apiHealth = await fetchPath(port, "/api/healthz").catch(() => null);
+  if (apiHealth && apiHealth.body.includes("SMOKE-OK")) {
+    throw new Error("/api/* path was incorrectly served by the SPA catch-all");
+  }
+}
+
+async function runDefaultCorsChecks(port) {
+  // Same-origin: browsers send no Origin header, request must succeed.
+  const sameOrigin = await fetchCors(port, "/api/healthz");
+  if (sameOrigin.status !== 200) {
+    throw new Error(`cors-same-origin: expected 200 from /api/healthz, got ${sameOrigin.status}`);
+  }
+  log("OK cors-same-origin (no Origin header) -> 200");
+
+  // Foreign origin: server must NOT vouch for it (no ACAO header).
+  const foreign = await fetchCors(port, "/api/healthz", FOREIGN_ORIGIN);
+  if (foreign.allowOrigin) {
+    throw new Error(
+      `cors-foreign-default: expected no Access-Control-Allow-Origin for ${FOREIGN_ORIGIN}, got "${foreign.allowOrigin}"`,
+    );
+  }
+  log(`OK cors-foreign-default ${FOREIGN_ORIGIN} -> no Access-Control-Allow-Origin`);
+}
+
+async function runPublicOriginCorsChecks(port) {
+  // The configured PUBLIC_ORIGIN must be allowlisted.
+  const allowed = await fetchCors(port, "/api/healthz", SPLIT_ORIGIN);
+  if (allowed.allowOrigin !== SPLIT_ORIGIN) {
+    throw new Error(
+      `cors-public-origin: expected Access-Control-Allow-Origin "${SPLIT_ORIGIN}", got "${allowed.allowOrigin}"`,
+    );
+  }
+  log(`OK cors-public-origin ${SPLIT_ORIGIN} -> Access-Control-Allow-Origin echoed`);
+
+  // A foreign origin must still be rejected even with PUBLIC_ORIGIN set.
+  const foreign = await fetchCors(port, "/api/healthz", FOREIGN_ORIGIN);
+  if (foreign.allowOrigin) {
+    throw new Error(
+      `cors-foreign-with-public-origin: expected no Access-Control-Allow-Origin for ${FOREIGN_ORIGIN}, got "${foreign.allowOrigin}"`,
+    );
+  }
+  log(`OK cors-foreign-with-public-origin ${FOREIGN_ORIGIN} -> no Access-Control-Allow-Origin`);
+}
+
+async function main() {
+  const clientDist = mkdtempSync(path.join(tmpdir(), "smoke-client-dist-"));
+  writeFileSync(path.join(clientDist, "index.html"), INDEX_SENTINEL);
+  mkdirSync(path.join(clientDist, "assets"));
+  writeFileSync(path.join(clientDist, "assets", "app.js"), "/* asset */");
+
+  let failed = false;
+  try {
+    log("phase 1: default self-host install (no PUBLIC_ORIGIN)");
+    await withServer({}, clientDist, async (port) => {
+      await runSpaChecks(port);
+      await runDefaultCorsChecks(port);
+    });
+
+    log(`phase 2: split-origin self-host install (PUBLIC_ORIGIN=${SPLIT_ORIGIN})`);
+    await withServer({ PUBLIC_ORIGIN: SPLIT_ORIGIN }, clientDist, async (port) => {
+      await runPublicOriginCorsChecks(port);
+    });
 
     log("PASS");
   } catch (err) {
     failed = true;
     console.error(`[smoke-serve-static] FAIL: ${err instanceof Error ? err.message : err}`);
   } finally {
-    await killChild(child);
     rmSync(clientDist, { recursive: true, force: true });
   }
 
