@@ -35,3 +35,6 @@ PeerTileGrid) and `git log -1 --name-only` shows you did not touch
 `helloEnvelope*`, the agent-protocol signing lib, or `api-server/src`, treat
 these two as flaky/environmental and skip_validation with that reason. Confirm
 your own added tests + `void-client typecheck` pass in isolation first.
+
+- api-server `security-headers-proxy.test.ts` requires an `nginx` binary on PATH; containers without nginx fail it deterministically — env-blocked, not a code regression.
+- void-client `RoomPage.test.tsx` "urgent re-fire is one-shot" toast test is a timing flake under full-suite load; passes in isolation.

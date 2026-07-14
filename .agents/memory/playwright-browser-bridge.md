@@ -31,3 +31,19 @@ specs. Run individual specs with
 `PLAYWRIGHT_SKIP_VALIDATE_HOST_REQUIREMENTS=1 PORT=5173 BASE_PATH=/` and
 `--project=<one>` to fit the 120s bash timeout; full spec files across all
 projects exceed it.
+
+**Durable fix (scripted):** `artifacts/void-client/scripts/bridge-playwright-browsers.mjs`
+runs as Playwright `globalSetup` — re-applies the bridge on every suite
+invocation, resolving expected revisions from the installed playwright-core's
+browsers.json. Cache dir resolution must honor `XDG_CACHE_HOME` (Replit sets
+it to `<workspace>/.cache`), not just `~/.cache`.
+
+**WebKit "Page crashed" on media routes:** the Nix WebKit resolves shared
+libs via RPATH but GStreamer discovers plugins via
+`GST_PLUGIN_SYSTEM_PATH_1_0`, which nothing sets — WPEWebProcess exits the
+moment a page attaches a MediaStream to a video/audio element (autoaudiosink
+missing). Fix: ldd the WebKit ELF, collect its gstreamer/gst-plugins-base/bad
+store dirs, add the matching-version gst-plugins-good from /nix/store, export
+the plugin path (+ `GST_REGISTRY_FORK=no`) in globalSetup — workers inherit
+the env. Do NOT try running a freshly downloaded newer webkit against the Nix
+libs: it dies with "stack smashing detected" (ABI mismatch).

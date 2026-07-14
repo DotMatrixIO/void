@@ -139,6 +139,12 @@ const FIREFOX_FAKE_MEDIA_PREFS = {
 } as const;
 
 export default defineConfig({
+  // Bridge Nix-store browsers into ~/.cache/ms-playwright before any
+  // browser launch — Replit's container cannot run `playwright install`
+  // downloads (missing system libs), so the suite relies on symlinked
+  // Nix builds. Running it as globalSetup makes the bridge durable
+  // across environment restarts (re-applied on every invocation).
+  globalSetup: "./scripts/bridge-playwright-browsers.mjs",
   testDir: "./tests/playwright",
   fullyParallel: true,
   forbidOnly: !!process.env.CI,
