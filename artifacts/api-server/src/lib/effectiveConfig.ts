@@ -14,6 +14,7 @@
 // token is shown by its last-4 suffix only, matching the existing ICE banner.
 
 import { isTorOnly, turnUrlTerminatesOverTor } from "./torOnly";
+import { resolveAllowedOrigins } from "./corsOrigins";
 import { cloudflareCredsConfigured, tokenIdSuffix } from "./cloudflareTurn";
 import { describeLogRetention } from "./logRetention";
 import { lightningConfigSummary } from "../services/lightning";
@@ -70,6 +71,53 @@ function describePresence(raw: string | undefined): boolean {
   return raw !== undefined && raw.trim() !== "";
 }
 
+/**
+ * Report the resolved CORS allowlist (lib/corsOrigins.ts). The allowlist is
+ * fail-closed, so an empty list means every cross-origin browser request is
+ * blocked — fine for a same-origin deploy (SERVE_STATIC=1), fatal for a
+ * split-origin one. The loud warning for the latter lives in
+ * buildCorsMisconfigWarning(); this row just states the facts.
+ */
+function describeCorsOrigins(env: NodeJS.ProcessEnv): string {
+  const origins = resolveAllowedOrigins(env);
+  return origins.length > 0
+    ? origins.join(", ")
+    : "none — same-origin requests only (fail-closed)";
+}
+
+/**
+ * Boxed warning for the likely split-origin misconfiguration: the CORS
+ * allowlist resolved empty AND SERVE_STATIC is unset. In that posture the
+ * server is not serving the frontend itself, so the client must live on
+ * another origin — and with an empty (fail-closed) allowlist every one of
+ * its API calls and Socket.io connections will be silently blocked by the
+ * browser. Returns null when the configuration looks fine.
+ */
+export function buildCorsMisconfigWarning(
+  env: NodeJS.ProcessEnv = process.env,
+): string | null {
+  if (env["SERVE_STATIC"] === "1") return null;
+  if (resolveAllowedOrigins(env).length > 0) return null;
+
+  return [
+    "",
+    "==============================================================================",
+    "  CORS ALLOWLIST EMPTY IN SPLIT-ORIGIN MODE — browser requests will be blocked",
+    "------------------------------------------------------------------------------",
+    "  SERVE_STATIC is unset, so this server is not serving the frontend itself,",
+    "  yet no allowed origin could be derived from the environment. The CORS",
+    "  allowlist is fail-closed: with no entries, every cross-origin API call and",
+    "  Socket.io connection from the client will be silently blocked by the",
+    "  browser.",
+    "  To fix: set PUBLIC_ORIGIN to the client's origin (e.g.",
+    "  https://your-domain.example) in the runtime env. See README-selfhost.md §5.",
+    "  If this server DOES serve the frontend, set SERVE_STATIC=1 instead —",
+    "  same-origin requests are not CORS requests and need no allowlist entry.",
+    "==============================================================================",
+    "",
+  ].join("\n");
+}
+
 function describePaywallSecret(env: NodeJS.ProcessEnv): string {
   return describePresence(env["PAYWALL_SECRET"])
     ? "set (operator-provided)"
@@ -93,6 +141,7 @@ export function buildEffectiveConfigSummary(
     ["Mode", describeMode(env)],
     ["Tor-only", describeTorOnly(env)],
     ["ICE / TURN", describeIceTurn(env)],
+    ["CORS origins", describeCorsOrigins(env)],
     ["Lightning", lightningConfigSummary()],
     ["Log retention", describeLogRetention({ env })],
     ["PAYWALL_SECRET", describePaywallSecret(env)],

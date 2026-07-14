@@ -1,6 +1,9 @@
 // SPDX-License-Identifier: AGPL-3.0-or-later
 import { describe, it, expect } from "vitest";
-import { buildEffectiveConfigSummary } from "../lib/effectiveConfig";
+import {
+  buildEffectiveConfigSummary,
+  buildCorsMisconfigWarning,
+} from "../lib/effectiveConfig";
 import { describeLogRetention } from "../lib/logRetention";
 import {
   configuredLightningBackend,
@@ -207,6 +210,30 @@ describe("buildEffectiveConfigSummary", () => {
     }
   });
 
+  it("reports an empty CORS allowlist as same-origin only", () => {
+    clearCloudflare();
+    try {
+      const out = buildEffectiveConfigSummary(baseEnv());
+      expect(out).toContain("CORS origins:");
+      expect(out).toContain("none — same-origin requests only (fail-closed)");
+    } finally {
+      restoreCloudflare();
+    }
+  });
+
+  it("lists the resolved CORS origins when derivable", () => {
+    clearCloudflare();
+    try {
+      const out = buildEffectiveConfigSummary(
+        baseEnv({ PUBLIC_ORIGIN: "https://void.example.com" }),
+      );
+      expect(out).toContain("https://void.example.com");
+      expect(out).not.toContain("none — same-origin requests only");
+    } finally {
+      restoreCloudflare();
+    }
+  });
+
   it("reports Cloudflare TURN by token suffix only when configured", () => {
     process.env["CLOUDFLARE_TURN_TOKEN_ID"] = "cf-token-id-WXYZ";
     process.env["CLOUDFLARE_TURN_API_TOKEN"] = "cf-api-token-secret-value";
@@ -223,5 +250,36 @@ describe("buildEffectiveConfigSummary", () => {
     } finally {
       restoreCloudflare();
     }
+  });
+});
+
+describe("buildCorsMisconfigWarning", () => {
+  it("warns when the allowlist is empty and SERVE_STATIC is unset", () => {
+    const out = buildCorsMisconfigWarning({});
+    expect(out).not.toBeNull();
+    expect(out).toContain("CORS ALLOWLIST EMPTY IN SPLIT-ORIGIN MODE");
+    expect(out).toContain("PUBLIC_ORIGIN");
+    expect(out).toContain("README-selfhost.md §5");
+  });
+
+  it("stays quiet under SERVE_STATIC=1 even with an empty allowlist", () => {
+    expect(buildCorsMisconfigWarning({ SERVE_STATIC: "1" })).toBeNull();
+  });
+
+  it("stays quiet when PUBLIC_ORIGIN populates the allowlist", () => {
+    expect(
+      buildCorsMisconfigWarning({ PUBLIC_ORIGIN: "https://void.example.com" }),
+    ).toBeNull();
+  });
+
+  it("stays quiet when a Replit domain populates the allowlist", () => {
+    expect(
+      buildCorsMisconfigWarning({ REPLIT_DEV_DOMAIN: "dev.replit.example" }),
+    ).toBeNull();
+  });
+
+  it("still warns when PUBLIC_ORIGIN is set but malformed", () => {
+    const out = buildCorsMisconfigWarning({ PUBLIC_ORIGIN: "not-a-url" });
+    expect(out).not.toBeNull();
   });
 });

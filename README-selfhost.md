@@ -891,6 +891,7 @@ resolved, post-clamp / post-fallback values for the main operator knobs:
   Mode:           self-hosted single-origin (SERVE_STATIC=1)
   Tor-only:       off
   ICE / TURN:     self-hosted TURN configured; STUN configured
+  CORS origins:   none — same-origin requests only (fail-closed)
   Lightning:      backend=lnbits, fetch timeout 8000ms (default; LIGHTNING_FETCH_TIMEOUT_MS unset)
   Log retention:  ~5 day(s) (from logrotate config LOGROTATE_CONFIG_PATH)
   PAYWALL_SECRET: set (operator-provided)
@@ -901,6 +902,14 @@ resolved, post-clamp / post-fallback values for the main operator knobs:
 ```
 
 Find it with `docker compose logs void | grep -A12 "effective runtime configuration"`.
+
+The **CORS origins** row prints the resolved cross-origin allowlist (derived
+from `PUBLIC_ORIGIN`, `ONION_HOSTNAME`, or Replit domains — see §5). The
+allowlist is fail-closed, so `none — same-origin requests only` is correct
+for a single-origin deploy (`SERVE_STATIC=1`) but fatal for a split-origin
+one: if the list is empty while `SERVE_STATIC` is unset, the server also
+emits a boxed `CORS ALLOWLIST EMPTY IN SPLIT-ORIGIN MODE` warning pointing at
+`PUBLIC_ORIGIN` in §5.
 
 **Secrets are never echoed.** `PAYWALL_SECRET`, `TURN_SECRET`, and any
 Cloudflare API token are reported only by presence/posture (`set` / `unset`,

@@ -26,7 +26,10 @@ import {
   torOnlyCloudflareWarning,
 } from "./lib/torOnly";
 import { evaluateLogRetention } from "./lib/logRetention";
-import { buildEffectiveConfigSummary } from "./lib/effectiveConfig";
+import {
+  buildEffectiveConfigSummary,
+  buildCorsMisconfigWarning,
+} from "./lib/effectiveConfig";
 import { startPricingRefreshers } from "./services/pricing";
 import { lightningFetchTimeoutStartupLine } from "./services/lightning";
 import { resolveAllowedOrigins } from "./lib/corsOrigins";
@@ -170,6 +173,20 @@ logger.info(lightningFetchTimeoutStartupLine());
 // can verify the running configuration in one glance. See lib/effectiveConfig.ts
 // and README-selfhost.md §4f.
 logger.info(buildEffectiveConfigSummary());
+
+// Split-origin misconfiguration guard (Task: warn when the fail-closed CORS
+// allowlist is empty while SERVE_STATIC is unset). In that posture the client
+// must live on another origin, and with no allowlist entries every one of its
+// requests is silently blocked by the browser. The effective-config summary
+// above already prints the resolved allowlist; this banner makes the likely
+// misconfiguration impossible to miss. See lib/effectiveConfig.ts and
+// README-selfhost.md §5 (PUBLIC_ORIGIN).
+{
+  const corsWarning = buildCorsMisconfigWarning();
+  if (corsWarning) {
+    logger.warn(corsWarning);
+  }
+}
 
 const rawPort = process.env["PORT"];
 
