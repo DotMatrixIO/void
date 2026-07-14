@@ -45,7 +45,7 @@
  *   BIOMETRIC_AT_MS=12300 \
  *     pnpm --filter @workspace/void-client run gen:demo-posters
  *
- * Chromium discovery mirrors gen-still-poster.mjs: PUPPETEER_EXECUTABLE_PATH,
+ * Chromium discovery order: PUPPETEER_EXECUTABLE_PATH,
  * then `which`, then the Nix-store playwright-browsers-chromium binary.
  */
 

@@ -22,8 +22,8 @@ import StartScreen from "@/pages/StartScreen";
  * component with the real global stylesheet so a true browser can measure it.
  *
  * Gated behind `import.meta.env.DEV` in `App.tsx` exactly like the
- * `/__test/joined-call`, `/__test/share-warnings`, `/__smoke/room`, and
- * `/still/:variant` routes, so the production bundle never ships it.
+ * `/__test/joined-call`, `/__test/share-warnings`, and `/__smoke/room`
+ * routes, so the production bundle never ships it.
  */
 const NOOP = () => {};
 

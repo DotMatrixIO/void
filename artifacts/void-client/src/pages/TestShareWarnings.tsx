@@ -23,7 +23,7 @@ import RoomShareSheet from "@/components/RoomShareSheet";
  * never stack on top of each other and obscure one another's text.
  *
  * Gated behind `import.meta.env.DEV` in `App.tsx` exactly like the
- * `/__test/joined-call`, `/__smoke/room`, and `/still/:variant` routes,
+ * `/__test/joined-call` and `/__smoke/room` routes,
  * so the production bundle never ships it.
  */
 const PHRASE = "midnight cobalt fern lantern quartz harbour";

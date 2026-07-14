@@ -187,13 +187,12 @@ Room creation requires a Lightning payment (1,000 sats/hour). Backend adapters s
 - `/` — Landing page (first visit) → Start screen (after LAUNCH APP)
 - `/#word1-word2-word3-word4-word5-word6` — Auto-derive and join via BIP39 void phrase (bypasses landing page)
 
-## Editorial Hero Still
+## Editorial Hero Still & Social Card
 
-The landing-page hero is a hand-chosen pixelated self-portrait (`public/portraits/self-portrait-gold-ascii.png`) layered behind the copy column so the hero section pulls toward center — it is not auto-regenerated and lives outside the `still-poster` pipeline (Task #588). Only the social card JPEG (`public/og/this-room-will-not-exist-social.jpg` at 1200x630) is a screenshot of the live `RoomPage` UI, framed by an editorial caption panel. To keep the social card in sync when `RoomPage` changes (header, video grid, control bar, expiry pill, etc.), regenerate it with:
+Both marketing images are hand-chosen and MUST NEVER be auto-regenerated:
 
-- `pnpm --filter @workspace/void-client run gen:still-poster`
-
-The script (`artifacts/void-client/scripts/gen-still-poster.mjs`) spawns a dedicated `vite dev` on port 24463, drives headless Chromium via `puppeteer-core` against the dev-only `/still/:variant` route in `src/pages/StillPoster.tsx`, and overwrites the social JPEG. Chromium is discovered via `PUPPETEER_EXECUTABLE_PATH` → `which chromium*` → the Nix `playwright-browsers-chromium` derivation (no Chromium download in the Replit container). The 1200x630 pixel size is the canonical social-card dimension and MUST stay in lockstep with the `dimensions` constant in `StillPoster.tsx`.
+- The landing-page hero is a hand-chosen pixelated self-portrait (`public/portraits/self-portrait-gold-ascii.png`) layered behind the copy column so the hero section pulls toward center (Task #588).
+- The social card JPEG (`public/og/this-room-will-not-exist-social.jpg`, 1200x630 — the canonical social-card dimension) is a hand-chosen user screenshot of a live 4-person room, installed permanently in Task #1125. The old still-poster regen pipeline (`gen-still-poster.mjs`, `check-still-poster.mjs`, `SocialPoster.tsx`, `StillPoster.tsx`, the dev-only `/still/:variant` route) was deleted, and the `still-poster-drift` validation was neutralized to a no-op. Do not reintroduce any script or guard that overwrites this file.
 
 ## Per-Route Open Graph Cards
 
@@ -315,7 +314,7 @@ All geometry is absolutely positioned with `pointerEvents: none`:
 ## CI — Routes vs Technical-Overview Drift Check
 
 - `artifacts/void-client/scripts/check-routes-overview-drift.mjs` — sibling drift check to the AsyncAPI one above, but for the void-client router and `VOID_TECHNICAL_OVERVIEW.md` §6.2 ("Page Structure"). Reconciles the route list in code with the route list in the documentation introduced in Task #325 (which removed `/music` and gated `/agents`; `/agents` has since been removed entirely).
-- The script enumerates every `<Route path="…">` declaration in `artifacts/void-client/src/App.tsx`, classifies each as production or DEV-gated (DEV-gated = wrapped in `{import.meta.env.DEV && (…)}` within a 5-line lookback — currently only `/still/:variant` for marketing-still-poster generation), and diffs the production set against every backticked route literal in the §6.2 markdown table.
+- The script enumerates every `<Route path="…">` declaration in `artifacts/void-client/src/App.tsx`, classifies each as production or DEV-gated (DEV-gated = wrapped in `{import.meta.env.DEV && (…)}` within a 5-line lookback — e.g. the smoke-harness routes), and diffs the production set against every backticked route literal in the §6.2 markdown table.
 - The job fails if either side of the diff is non-empty:
   - **Code → overview drift**: a `<Route>` exists with no §6.2 row, OR exists with a §6.2 row that is struck-through / marked "Hidden in vX" (i.e. the overview asserts the route is gated out but the router still serves it).
   - **Overview → code drift**: a §6.2 row references a route with no matching `<Route>` in `App.tsx` AND no "Hidden in vX" / "deferred" / strike-through gating note in the row.

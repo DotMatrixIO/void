@@ -154,7 +154,6 @@ vi.mock("@/pages/ThreatModelPage", () => ({ default: () => null }));
 vi.mock("@/pages/AuditPage", () => ({ default: () => null }));
 vi.mock("@/pages/ServerStateProofPage", () => ({ default: () => null }));
 vi.mock("@/pages/BiometricPage", () => ({ default: () => null }));
-vi.mock("@/pages/StillPoster", () => ({ default: () => null }));
 
 import App from "./App";
 

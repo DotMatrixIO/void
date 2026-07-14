@@ -8,8 +8,10 @@ description: How the landing-page demo-video posters are regenerated, and the pu
 The landing-page click-to-play thumbnails (`public/*-demo-poster.png`) are
 captured from the **live** video apps (`biometric-demo-video`,
 `coordination-demo-video`) via a repeatable script
-(`gen:demo-posters`), modeled on `gen-still-poster.mjs` (puppeteer-core +
-isolated spawned vite). Re-run it whenever a demo video is re-edited.
+(`gen:demo-posters`) using puppeteer-core + an isolated spawned vite.
+Re-run it whenever a demo video is re-edited. (The old still-poster pipeline
+this was modeled on has since been deleted — the social OG card is now a
+hand-chosen screenshot that must never be regenerated.)
 
 **Why capture from the live app, not the MP4:** the landing embed plays the
 live app in a sandboxed iframe on click; the MP4 is only a fallback. So a

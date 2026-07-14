@@ -22,14 +22,10 @@ change bytes.)
 The guards (in `artifacts/void-client/scripts/`):
 - `check-biometric-video-drift.mjs` — watches `artifacts/biometric-demo-video/src/**`
   + `record-biometric.mjs`; artifact = `public/biometric-demo.mp4` + poster jpg.
-- `check-still-poster.mjs` — watches `src/pages/SocialPoster.tsx`,
-  `src/pages/RoomPage.tsx` + their one-level direct local imports; artifact =
-  `public/og/this-room-will-not-exist-social.jpg`.
+- (`check-still-poster.mjs` was DELETED along with the whole still-poster
+  pipeline — the social OG card is now a hand-chosen screenshot that must
+  never be regenerated, so no guard watches it anymore.)
 
 **How to apply:** before any repo-wide header/codemod, carve out the
 biometric-demo-video src tree (it has a currently-green guard you'd regress
-with binary churn). The still-poster watched set (RoomPage etc.) is frequently
-already red from an un-regenerated social card — touching it doesn't change its
-status, but know that its real fix is `pnpm --filter @workspace/void-client run
-gen:still-poster` capturing the genuinely-changed UI, which is a media concern,
-not a licensing one.
+with binary churn).

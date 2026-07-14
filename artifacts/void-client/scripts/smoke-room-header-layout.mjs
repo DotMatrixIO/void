@@ -28,7 +28,7 @@
  *   5. The RETRY SECURE CHANNEL button in every tile of the 4-up grid
  *      is fully visible inside its tile and inside the viewport.
  *
- * Reuses `gen-still-poster.mjs`'s chromium-discovery so it works
+ * Uses the shared chromium-discovery pattern so it works
  * inside the Replit Nix image without bundling a browser. The dev
  * server URL is taken from `SMOKE_BASE_URL` (default
  * `http://localhost:24363`).

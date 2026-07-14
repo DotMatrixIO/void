@@ -15,7 +15,6 @@
     "check:feature-policy-sync": "node scripts/check-feature-policy-sync.mjs",
     "check:onion-mirror-sync": "node scripts/check-onion-mirror-sync.mjs",
     "check:release-onion-bake": "node scripts/check-release-onion-bake.mjs",
-    "check:still-poster": "node scripts/check-still-poster.mjs",
     "check:biometric-video-drift": "node scripts/check-biometric-video-drift.mjs",
     "check:biometric-poster-drift": "node scripts/check-biometric-poster-drift.mjs",
     "update:biometric-poster": "node scripts/check-biometric-poster-drift.mjs --update-reference",
@@ -41,7 +40,6 @@
     "test:playwright": "PLAYWRIGHT_SKIP_VALIDATE_HOST_REQUIREMENTS=1 PORT=${PORT:-5173} BASE_PATH=${BASE_PATH:-/} playwright test --config playwright.config.ts",
     "test:playwright:devicecloud": "PLAYWRIGHT_SKIP_VALIDATE_HOST_REQUIREMENTS=1 playwright test --config playwright.devicecloud.config.ts",
     "gen:og": "node scripts/gen-og-images.mjs",
-    "gen:still-poster": "node scripts/gen-still-poster.mjs",
     "gen:demo-posters": "node scripts/gen-demo-posters.mjs"
   },
   "devDependencies": {

@@ -17,7 +17,7 @@ import { readCssToken } from "@/lib/cssTokens";
  *   • the WebRTC handshake.
  *
  * Gated behind `import.meta.env.DEV` in `App.tsx` exactly like the
- * `/still/:variant` and `/__smoke/room` routes, so the production
+ * `/__smoke/room` route, so the production
  * bundle never ships it. The gating is verified by
  * `tests/playwright/control-bar-layout.spec.ts` (route reachable in
  * dev only) and by grep-ing the production build during PR review.

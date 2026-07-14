@@ -29,7 +29,6 @@ import LandingPage from "@/pages/LandingPage";
 import MediaPage from "@/pages/MediaPage";
 import SplashScreen, { shouldShowSplash } from "@/components/SplashScreen";
 import RoomPage from "@/pages/RoomPage";
-import StillPoster from "@/pages/StillPoster";
 import SmokeRoom from "@/pages/SmokeRoom";
 import TestJoinedCallRoom from "@/pages/TestJoinedCallRoom";
 import TestShareWarnings from "@/pages/TestShareWarnings";
@@ -570,13 +569,6 @@ function Router() {
       <Route path="/docs/pricing" component={DocsPricingPage} />
       <Route path="/docs/limits" component={DocsLimitsPage} />
       <Route path="/docs/faq" component={DocsFaqPage} />
-      {/* Still-poster route is a marketing-asset generation tool, not a
-          user-facing page. Gated to dev builds so the production bundle
-          doesn't expose a generation UI; the captured JPGs live in
-          public/og and are served as static assets in production. */}
-      {import.meta.env.DEV && (
-        <Route path="/still/:variant" component={StillPoster} />
-      )}
       {/* Task #519: smoke harness route that mounts the real RoomPage in
           snapshot mode with forced secure-channel failures + visible
           wait-hint, so the layout pass in

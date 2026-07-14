@@ -514,7 +514,7 @@ Wouter handles top-level routing. The `/` route renders a `Home` component that 
 | ~~`/agents`~~ | ~~`AgentModePage`~~ | **Removed.** The public Agent Mode marketing page, hamburger entry, and footer link were removed in v0.5 (Task #321); the route, the `AgentModePage.tsx` component, and the agent protocol library + SDK have since been deleted entirely. Struck-through so the routes/nav drift checks confirm it stays absent. |
 | (any unmatched) | `NotFound` | 404 page |
 
-In addition, a single **DEV-only** route — `<Route path="/still/:variant" component={StillPoster}>` gated behind `import.meta.env.DEV` — exists for generating marketing still posters (the captured JPGs live in `public/og` and are served as static assets in production). It is intentionally absent from the production surface and from this table; the routes-overview drift check (`pnpm --filter @workspace/void-client run check:routes-overview`) skips DEV-gated routes when diffing.
+In addition, a small set of **DEV-only** routes (smoke-harness pages gated behind `import.meta.env.DEV`) exists for local testing. They are intentionally absent from the production surface and from this table; the routes-overview drift check (`pnpm --filter @workspace/void-client run check:routes-overview`) skips DEV-gated routes when diffing. (The former `/still/:variant` marketing-poster route was removed in Task #1125 — the social OG card is now a hand-chosen screenshot in `public/og`, never regenerated from source.)
 
 `PreviewGate` is mounted only inside `Home` for the pending-room flow; the info pages (`/why`, `/compare`, `/threat-model`, etc.) render directly without it.
 

@@ -65,7 +65,6 @@ vi.mock("@/pages/ThreatModelPage", () => ({ default: () => null }));
 vi.mock("@/pages/AuditPage", () => ({ default: () => null }));
 vi.mock("@/pages/ServerStateProofPage", () => ({ default: () => null }));
 vi.mock("@/pages/BiometricPage", () => ({ default: () => null }));
-vi.mock("@/pages/StillPoster", () => ({ default: () => null }));
 
 // Sentinels for the two routes that are NOT supposed to exist. If a future
 // refactor wires either page back into App.tsx, the route would render this

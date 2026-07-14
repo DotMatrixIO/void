@@ -51,7 +51,7 @@ async function extractCodeRoutes() {
     // preceding lines for a DEV-only conditional. The current pattern in
     // App.tsx is:
     //   {import.meta.env.DEV && (
-    //     <Route path="/still/:variant" component={StillPoster} />
+    //     <Route path="/__smoke-room" component={SmokeRoom} />
     //   )}
     // A 5-line lookback is wide enough for that block while staying narrow
     // enough not to false-positive on an unrelated DEV branch elsewhere in
