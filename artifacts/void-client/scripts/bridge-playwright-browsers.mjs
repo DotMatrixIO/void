@@ -27,6 +27,40 @@ function log(msg) {
   console.log(`[bridge-playwright-browsers] ${msg}`);
 }
 
+// A missing REQUIRED browser must abort the run (globalSetup throwing
+// makes `playwright test` exit non-zero) instead of letting every spec
+// die with "Executable doesn't exist" — or worse, letting a filtered
+// run pass having executed nothing. Optional pieces (ffmpeg, headed
+// chromium) stay warnings.
+class BridgeError extends Error {
+  constructor(missing, hint) {
+    super(
+      `[bridge-playwright-browsers] REQUIRED browser cannot be bridged: ${missing}.\n` +
+        `${hint}\n` +
+        `The Playwright suite cannot run without it — failing loudly instead of ` +
+        `letting every spec die with "Executable doesn't exist".`,
+    );
+    this.name = "BridgeError";
+  }
+}
+
+// Derive the set of required browser engines from the Playwright config
+// actually in force (globalSetup receives it), so the required list can
+// never drift behind the projects: if a future project starts using
+// firefox, firefox automatically becomes required.
+function requiredEnginesFromConfig(config) {
+  const engines = new Set();
+  for (const p of config?.projects ?? []) {
+    engines.add(p.use?.browserName ?? p.use?.defaultBrowserType ?? "chromium");
+  }
+  // No config (direct CLI invocation) — assume the canonical pair.
+  if (engines.size === 0) {
+    engines.add("chromium");
+    engines.add("webkit");
+  }
+  return engines;
+}
+
 function findNixBrowsersDir() {
   // Prefer an explicit override, then scan the Nix store for the
   // multi-browser playwright-browsers derivation (the one that contains
@@ -92,7 +126,8 @@ function ensureSymlink(target, linkPath) {
   return true;
 }
 
-export default function bridgePlaywrightBrowsers() {
+export default function bridgePlaywrightBrowsers(config) {
+  const required = requiredEnginesFromConfig(config);
   // Mirror Playwright's own registry-directory resolution: explicit
   // PLAYWRIGHT_BROWSERS_PATH wins, then XDG_CACHE_HOME (set to
   // <workspace>/.cache on Replit), then ~/.cache.
@@ -108,7 +143,12 @@ export default function bridgePlaywrightBrowsers() {
   const rev = expectedRevisions();
   const nixDir = findNixBrowsersDir();
   if (!nixDir) {
+    // Without the derivation nothing REQUIRED can be bridged. If the
+    // executables already exist in the cache (e.g. bridged in a prior
+    // session and the store path was since GC'd but symlinks resolve),
+    // the verification below still passes; otherwise it throws.
     log("WARNING: no playwright-browsers derivation found in /nix/store — cannot bridge.");
+    verifyRequiredExecutables(required, rev, cacheDir);
     return;
   }
   log(`Nix browsers: ${nixDir}`);
@@ -124,6 +164,14 @@ export default function bridgePlaywrightBrowsers() {
     const dest = path.join(cacheDir, `chromium_headless_shell-${want}`);
     const src = newestRevisionDir(nixDir, "chromium_headless_shell");
     if (!src) {
+      if (required.has("chromium")) {
+        throw new BridgeError(
+          `chromium-headless-shell (revision ${want})`,
+          `No chromium_headless_shell-* directory in ${nixDir}. ` +
+            `Check the playwright-browsers Nix derivation, or set ` +
+            `PLAYWRIGHT_NIX_BROWSERS_DIR to a store path that contains one.`,
+        );
+      }
       log("WARNING: no chromium_headless_shell in Nix derivation.");
     } else {
       const srcBinDir = path.join(src, "chrome-linux");
@@ -166,6 +214,14 @@ export default function bridgePlaywrightBrowsers() {
     const want = rev["webkit"];
     const src = newestRevisionDir(nixDir, "webkit");
     if (!src) {
+      if (required.has("webkit")) {
+        throw new BridgeError(
+          `webkit (revision ${want})`,
+          `No webkit-* directory in ${nixDir}. ` +
+            `Check the playwright-browsers Nix derivation, or set ` +
+            `PLAYWRIGHT_NIX_BROWSERS_DIR to a store path that contains one.`,
+        );
+      }
       log("WARNING: no webkit in Nix derivation.");
     } else {
       const changed = ensureSymlink(src, path.join(cacheDir, `webkit-${want}`));
@@ -182,6 +238,53 @@ export default function bridgePlaywrightBrowsers() {
       const changed = ensureSymlink(src, path.join(cacheDir, `ffmpeg-${want}`));
       if (changed) log(`Bridged ffmpeg-${want} <- ${src}`);
     }
+  }
+
+  // Final gate: the bridge may have "succeeded" while producing dangling
+  // symlinks (Nix store path GC'd) or a layout the installed Playwright
+  // no longer expects. Resolve each REQUIRED engine's executable and
+  // throw if it does not actually exist on disk.
+  verifyRequiredExecutables(required, rev, cacheDir);
+}
+
+// Executable locations per engine, matching Playwright's registry layout.
+// fs.existsSync follows symlinks, so a dangling bridge fails here too.
+function verifyRequiredExecutables(required, rev, cacheDir) {
+  const checks = {
+    chromium: {
+      exe: path.join(
+        cacheDir,
+        `chromium_headless_shell-${rev["chromium-headless-shell"]}`,
+        "chrome-headless-shell-linux64",
+        "chrome-headless-shell",
+      ),
+      hint:
+        "The chromium headless shell bridge is missing or dangling. " +
+        "Re-run `node scripts/bridge-playwright-browsers.mjs` after checking the " +
+        "playwright-browsers Nix derivation (PLAYWRIGHT_NIX_BROWSERS_DIR overrides the scan).",
+    },
+    webkit: {
+      exe: path.join(cacheDir, `webkit-${rev["webkit"]}`, "pw_run.sh"),
+      hint:
+        "The webkit bridge is missing or dangling. " +
+        "Re-run `node scripts/bridge-playwright-browsers.mjs` after checking the " +
+        "playwright-browsers Nix derivation (PLAYWRIGHT_NIX_BROWSERS_DIR overrides the scan).",
+    },
+    // Firefox is never bridged from Nix (the derivation does not ship it);
+    // it only becomes required when a firefox project is enabled
+    // (PLAYWRIGHT_FIREFOX=1), and is provided by `playwright install firefox`.
+    firefox: {
+      exe: path.join(cacheDir, `firefox-${rev["firefox"]}`, "firefox", "firefox"),
+      hint: "Run `pnpm --filter @workspace/void-client exec playwright install firefox`.",
+    },
+  };
+  for (const engine of required) {
+    const check = checks[engine];
+    if (!check) continue;
+    if (!fs.existsSync(check.exe)) {
+      throw new BridgeError(`${engine} (expected executable: ${check.exe})`, check.hint);
+    }
+    log(`Verified ${engine}: ${check.exe}`);
   }
 }
 

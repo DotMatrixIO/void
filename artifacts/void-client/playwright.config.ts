@@ -161,7 +161,11 @@ export default defineConfig({
   // chromium ~36s spikes). A generous timeout keeps the specs from flaking on
   // environmental slowness without changing any assertion or reducing coverage.
   timeout: 90_000,
-  reporter: [["list"]],
+  // min-specs-reporter (Task #1134): fails the run if ZERO tests actually
+  // executed — a suite that passes having run nothing (testMatch drift,
+  // renamed spec, over-broad filter) is falsely reassuring. Escape hatch
+  // for deliberate empty runs: PLAYWRIGHT_ALLOW_ZERO_TESTS=1.
+  reporter: [["list"], ["./scripts/min-specs-reporter.mjs"]],
   use: {
     baseURL: `http://127.0.0.1:${PORT}${BASE_PATH.replace(/\/$/, "")}`,
     trace: "off",
