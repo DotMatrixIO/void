@@ -122,6 +122,10 @@ args = "test-publish-inventory"
 task = "workflow.run"
 args = "test-mockup-codegen-safe"
 
+[[workflows.workflow.tasks]]
+task = "workflow.run"
+args = "replit-md-size"
+
 [[workflows.workflow]]
 name = "api-server-tests"
 author = "agent"
@@ -393,6 +397,17 @@ author = "agent"
 [[workflows.workflow.tasks]]
 task = "shell.exec"
 args = "pnpm --filter @workspace/scripts run test:mockup-codegen-safe"
+
+[workflows.workflow.metadata]
+isValidation = true
+
+[[workflows.workflow]]
+name = "replit-md-size"
+author = "agent"
+
+[[workflows.workflow.tasks]]
+task = "shell.exec"
+args = "pnpm --filter @workspace/scripts run check:replit-md-size"
 
 [workflows.workflow.metadata]
 isValidation = true

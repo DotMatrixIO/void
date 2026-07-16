@@ -8,6 +8,7 @@
     "check:pnpm-action-version": "node ./check-pnpm-action-version.mjs",
     "check:publish-boundary": "node ./check-publish-boundary.mjs",
     "check:publish-inventory": "node ./check-publish-inventory.mjs",
+    "check:replit-md-size": "node ./check-replit-md-size.mjs",
     "check:wire-protocol-name": "node ./check-wire-protocol-name.mjs",
     "test:mockup-codegen-safe": "node ./check-mockup-codegen-safe.test.mjs",
     "test:preflight-build-vars": "node --experimental-strip-types ./preflight-build-vars.test.mjs",
