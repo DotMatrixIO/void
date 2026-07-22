@@ -105,6 +105,16 @@ function collectInlineScriptHashes(): string[] {
 }
 const inlineScriptHashes = collectInlineScriptHashes();
 
+// Read + validate ONION_HOSTNAME up here (before the helmet CSP is built)
+// because it feeds two consumers: the connect-src allow-list below and the
+// Onion-Location middleware further down. Single source of truth for the
+// server-side .onion host rule, shared with the /api/proof/posture
+// attestation (lib/torPosture.ts) so the two can never disagree about
+// whether ingress is onion-fronted.
+const ONION_HOSTNAME = (process.env["ONION_HOSTNAME"] ?? "").trim();
+const ONION_HOST_VALID =
+  ONION_HOSTNAME.length > 0 && isValidOnionHostname(ONION_HOSTNAME);
+
 app.use(
   helmet({
     contentSecurityPolicy: {
@@ -127,7 +137,18 @@ app.use(
         // anywhere on the network. If a future deployment ever needs to
         // serve plaintext-HTTP dev, gate the addition of "ws:" on
         // NODE_ENV !== "production" here instead of restoring it globally.
-        connectSrc: ["'self'", "wss:"],
+        // Own onion mirror (when configured): the void-client footer runs a
+        // best-effort HEAD probe against http://<onion>/ from the clearnet
+        // origin (lib/onionReachability.ts) to decide whether to show the
+        // "requires Tor Browser" hint next to the ALSO ON .ONION link.
+        // Without this entry the probe is CSP-blocked on every page view,
+        // which (a) forces the hint into a permanent false "unreachable"
+        // even on Tor-aware browsers and (b) spams the csp_report log sink.
+        // http:// is correct — onion services terminate inside Tor, no TLS
+        // port exists (same reasoning as the Onion-Location header below).
+        connectSrc: ONION_HOST_VALID
+          ? ["'self'", "wss:", `http://${ONION_HOSTNAME}`]
+          : ["'self'", "wss:"],
         workerSrc: ["'self'", "blob:"],
         mediaSrc: ["'self'", "blob:", "mediastream:"],
         imgSrc: ["'self'", "data:", "blob:"],
@@ -246,13 +267,9 @@ app.use((_req, res, next) => {
 // at the rendezvous point. The Onion-Location spec accepts
 // `http://*.onion`. Emitting `https://` here would point users at
 // a port that does not exist.
-const ONION_HOSTNAME = (process.env["ONION_HOSTNAME"] ?? "").trim();
-// Single source of truth for the server-side .onion host rule, shared with
-// the /api/proof/posture attestation (lib/torPosture.ts) so the two can never
-// disagree about whether ingress is onion-fronted.
-const ONION_HOST_VALID =
-  ONION_HOSTNAME.length > 0 && isValidOnionHostname(ONION_HOSTNAME);
-
+//
+// ONION_HOSTNAME / ONION_HOST_VALID are defined above the helmet block —
+// the CSP connect-src allow-list needs them before this middleware does.
 app.use((req, res, next) => {
   if (!ONION_HOST_VALID) return next();
   // req.protocol respects `trust proxy` (set above), so this is

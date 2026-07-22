@@ -10,7 +10,7 @@ Changing any helmet CSP directive in the api-server fans out to ALL of:
 - Two byte-exact `EXPECTED_CSP` pins: `src/__tests__/security-headers.test.ts` and `security-headers-proxy.test.ts` (both run WITHOUT `SERVE_STATIC`, so they never contain the inline-script hashes).
 - `scripts/smoke-serve-static.mjs` — asserts the served header end-to-end (including the exact sha256 of its sentinel inline script).
 - `docs/client-threat-model.md` — quotes the CSP value AND hardcodes `app.ts` line ranges in §3/§4/§5 tables; inserting lines into app.ts silently stales those refs.
-- Onion parity: every source must stay host-free (`'self'`, scheme keywords, quoted keywords, sha256 hashes — base64 has no dots) or `onion-location.test.ts` fails on TLD substrings.
+- Onion parity: sources must not name third-party clearnet hosts (`onion-location.test.ts` fails on TLD substrings). ONE deliberate exception: connect-src conditionally allow-lists the deployment's own `http://<ONION_HOSTNAME>` (validated v3 onion) so the footer's onion-reachability probe isn't CSP-blocked on clearnet; both env branches are pinned in onion-location.test.ts.
 
 # Why script-src is not just 'self'
 

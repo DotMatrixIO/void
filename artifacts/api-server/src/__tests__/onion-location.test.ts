@@ -85,6 +85,15 @@ describe("Onion-Location header (Task #384)", () => {
       });
       expect(res.headers.get("Onion-Location")).toBeNull();
     });
+
+    it("keeps CSP connect-src to 'self' wss: — no onion origin when unset", async () => {
+      const res = await fetch(`${baseUrl}/api/health`, {
+        headers: { "X-Forwarded-Proto": "https", "X-Forwarded-Host": "void.example" },
+      });
+      const csp = res.headers.get("content-security-policy") ?? "";
+      expect(csp).toContain("connect-src 'self' wss:;");
+      expect(csp).not.toContain(".onion");
+    });
   });
 
   describe("ONION_HOSTNAME configured", () => {
@@ -128,6 +137,21 @@ describe("Onion-Location header (Task #384)", () => {
       expect(res.headers.get("Onion-Location")).toBe(
         `http://${ONION_HOSTNAME}/api/does-not-exist`,
       );
+    });
+
+    it("allow-lists the configured onion origin in CSP connect-src (Task #389 reachability probe)", async () => {
+      // The void-client footer HEAD-probes http://<onion>/ from the
+      // clearnet origin (lib/onionReachability.ts). Without this entry
+      // the probe is CSP-blocked on every page view: the "requires Tor
+      // Browser" hint is forced to a false "unreachable" even on
+      // Tor-aware browsers, and every visitor emits a connect-src
+      // csp_report. Exact-substring pin including the trailing
+      // semicolon so an accidental extra source cannot hide in between.
+      const res = await fetch(`${baseUrl}/api/health`, {
+        headers: { "X-Forwarded-Proto": "https", "X-Forwarded-Host": "void.example" },
+      });
+      const csp = res.headers.get("content-security-policy") ?? "";
+      expect(csp).toContain(`connect-src 'self' wss: http://${ONION_HOSTNAME};`);
     });
 
     it("does NOT emit the header on a plain http request — Tor Browser ignores it there", async () => {
