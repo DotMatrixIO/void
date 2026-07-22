@@ -1,6 +1,7 @@
 // SPDX-License-Identifier: AGPL-3.0-or-later
 import path from "node:path";
-import { existsSync, readFileSync } from "node:fs";
+import { existsSync, readFileSync, readdirSync } from "node:fs";
+import { createHash } from "node:crypto";
 import express, { type Express } from "express";
 import cors from "cors";
 import helmet from "helmet";
@@ -46,21 +47,78 @@ const corpPolicy: "same-origin" | "same-site" = isSelfHosted ? "same-origin" : "
 // Every directive below resolves over the .onion origin without any
 // clearnet hostname being named or implied: every fetch source is
 // `'self'`, a scheme keyword (`data:`, `blob:`, `mediastream:`,
-// `wss:`, `ws:`), or a no-op (`'none'`, `'unsafe-inline'`). There
-// is no third-party host string anywhere in this policy. The
-// `report-to` group resolves to the same-origin endpoint
+// `wss:`, `ws:`), a no-op (`'none'`, `'unsafe-inline'`), the
+// host-free `'wasm-unsafe-eval'` keyword, or a content hash
+// (`'sha256-<base64>'` — base64 has no dots, so no clearnet TLD can
+// appear). There is no third-party host string anywhere in this
+// policy. The `report-to` group resolves to the same-origin endpoint
 // `/api/csp-report`, so violation reports posted from the onion
 // origin go back to the onion origin — never escape to clearnet.
 // __tests__/onion-location.test.ts pins this by loading the CSP
 // from a synthetic onion Host and asserting it contains no `.com`
 // / `.net` / `.io` / `.org` substring; if a future directive
 // adds a clearnet hostname, that test fails before review.
+
+// The built client HTML carries an inline <script> (the SRI-failure
+// diagnostic installed by task #249 — see artifacts/void-client/index.html).
+// script-src deliberately has no 'unsafe-inline', so each inline script
+// must be allow-listed by its sha256 hash or the browser blocks it (the
+// exact failure observed in production self-host deployments). Hashes
+// are computed once at startup from the HTML files actually on disk in
+// CLIENT_DIST — index.html plus the per-route OG pages emitted by
+// gen-og-pages.mjs — so a rebuild that changes the inline script is
+// picked up automatically on the next server start with no code change
+// here. Empty when SERVE_STATIC != 1 (split-origin installs: whatever
+// serves the client must emit its own CSP) or when the client build is
+// absent.
+function collectInlineScriptHashes(): string[] {
+  if (process.env["SERVE_STATIC"] !== "1") return [];
+  const dist = path.resolve(process.env["CLIENT_DIST"] || "./client");
+  let htmlFiles: string[];
+  try {
+    htmlFiles = readdirSync(dist).filter((f) => f.endsWith(".html"));
+  } catch {
+    return [];
+  }
+  const hashes = new Set<string>();
+  for (const file of htmlFiles) {
+    let html: string;
+    try {
+      html = readFileSync(path.join(dist, file), "utf8");
+    } catch {
+      continue;
+    }
+    // Inline scripts only: any <script> tag without a src attribute.
+    // The CSP hash is computed over the exact bytes between the tags,
+    // untrimmed, per the CSP3 spec.
+    for (const m of html.matchAll(
+      /<script(?![^>]*\bsrc\s*=)[^>]*>([\s\S]*?)<\/script>/gi,
+    )) {
+      const body = m[1];
+      if (!body) continue;
+      hashes.add(
+        `'sha256-${createHash("sha256").update(body, "utf8").digest("base64")}'`,
+      );
+    }
+  }
+  return [...hashes].sort();
+}
+const inlineScriptHashes = collectInlineScriptHashes();
+
 app.use(
   helmet({
     contentSecurityPolicy: {
       directives: {
         defaultSrc: ["'self'"],
-        scriptSrc: ["'self'"],
+        // 'wasm-unsafe-eval' is required for room-key derivation: the
+        // void-client derives roomId + AES key from the Void Phrase via
+        // argon2id compiled to WebAssembly (hash-wasm, lib/wire-core).
+        // Without it, browsers refuse WebAssembly compilation under a
+        // script-src that lacks 'unsafe-eval'/'wasm-unsafe-eval', and
+        // hosting/joining a room fails with DERIVATION_FAILED on every
+        // single-origin (SERVE_STATIC=1) install. It permits ONLY WASM
+        // compilation — JS eval()/Function() stay blocked.
+        scriptSrc: ["'self'", "'wasm-unsafe-eval'", ...inlineScriptHashes],
         styleSrc: ["'self'", "'unsafe-inline'"],
         // Audit L-05 (task #464): dropped the bare `ws:` scheme. Production
         // and Replit dev both run over HTTPS, so socket.io upgrades to wss:.

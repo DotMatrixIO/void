@@ -63,7 +63,12 @@ interface AssertableHeaders {
 // directive add/remove/reorder fails this test loudly.
 const EXPECTED_CSP =
   "default-src 'self';" +
-  "script-src 'self';" +
+  // 'wasm-unsafe-eval' permits WebAssembly compilation only (argon2id
+  // room-key derivation via hash-wasm); JS eval() stays blocked. Under
+  // SERVE_STATIC=1 the directive additionally carries sha256 hashes for
+  // the inline SRI-diagnostic script in the built client HTML — not
+  // present here because tests run without SERVE_STATIC.
+  "script-src 'self' 'wasm-unsafe-eval';" +
   "style-src 'self' 'unsafe-inline';" +
   "connect-src 'self' wss:;" +
   "worker-src 'self' blob:;" +

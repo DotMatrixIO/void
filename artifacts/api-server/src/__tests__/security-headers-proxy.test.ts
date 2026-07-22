@@ -24,7 +24,10 @@ const README_PATH = path.resolve(
 
 const EXPECTED_CSP =
   "default-src 'self';" +
-  "script-src 'self';" +
+  // See security-headers.test.ts: 'wasm-unsafe-eval' is WASM-compile-only
+  // (argon2id room-key derivation); no inline-script hashes here because
+  // this stack runs without SERVE_STATIC.
+  "script-src 'self' 'wasm-unsafe-eval';" +
   "style-src 'self' 'unsafe-inline';" +
   "connect-src 'self' wss:;" +
   "worker-src 'self' blob:;" +

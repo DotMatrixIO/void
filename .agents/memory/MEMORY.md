@@ -69,6 +69,7 @@
 - [useRoomConnection ONION-budget flake RESOLVED](void-client-reconnect-onion-budget-flake.md) — flake fixed July 2026; do not excuse failures in this file as pre-existing anymore.
 - [attached_assets recovery](attached-assets-recovery.md) — 130 files deleted by the June 2026 untrack commit were restored from history into gitignored attached_assets/; never bulk-delete them again.
 - [publish-inventory manifest drift](publish-inventory-manifest-drift.md) — post full-tree recovery, UNCLASSIFIED attached_assets (legacy tracked .txt) + STALE replit.nix (absent from tree) are GENUINE drift, not empty-index artifacts; owned by publish/manifest task, not recovery.
+- [CSP change fan-out & WASM requirement](csp-pin-fanout.md) — script-src needs 'wasm-unsafe-eval' (argon2id WASM) + startup-computed inline hashes; any CSP edit must update 2 EXPECTED_CSP pins, smoke, threat-model doc line refs.
 - [ink-surface invisibility scan](ink-surface-scan.md) — check:ink-surface fails NEW sub-3.0:1 color/background pairings (both dark-on-dark & light-on-light); baseline ratchet grandfathers ~50; never regen to absorb new offenders.
 - [Smoke-spawned api-server writes repo-root data/](smoke-server-cwd-state.md) — set ROOM_STATE_FILE to tmp when spawning the built server or a stray data/ dir auto-commits and trips publish-inventory.
 - [VOID self-host LNbits over Tailscale](void-selfhost-lnbits-tailscale.md) — Start9 LNbits: NOT a raw 100.x IP (StartOS routes by SNI/Host on 443); use https://<hostname>+extra_hosts+StartOS CA; test with node -e not wget.

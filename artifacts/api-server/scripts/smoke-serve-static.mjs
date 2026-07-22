@@ -18,6 +18,7 @@
 
 import { spawn } from "node:child_process";
 import { mkdtempSync, mkdirSync, writeFileSync, rmSync } from "node:fs";
+import { createHash } from "node:crypto";
 import { tmpdir } from "node:os";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
@@ -26,7 +27,18 @@ import net from "node:net";
 const artifactDir = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..");
 const distEntry = path.join(artifactDir, "dist", "index.mjs");
 
-const INDEX_SENTINEL = "<!doctype html><title>SMOKE-SPA</title><div id=root>SMOKE-OK</div>";
+// Mirrors the real client build: index.html carries an inline <script>
+// (the SRI-failure diagnostic). The server must allow-list it in
+// script-src by sha256 hash — computed at startup from the HTML on disk
+// — or browsers block it. Asserted in runCspChecks below.
+const INLINE_SCRIPT_BODY = 'console.log("SMOKE-INLINE");';
+const INDEX_SENTINEL =
+  "<!doctype html><title>SMOKE-SPA</title>" +
+  `<script>${INLINE_SCRIPT_BODY}</script>` +
+  "<div id=root>SMOKE-OK</div>";
+const INLINE_SCRIPT_HASH = `'sha256-${createHash("sha256")
+  .update(INLINE_SCRIPT_BODY, "utf8")
+  .digest("base64")}'`;
 
 function log(msg) {
   console.log(`[smoke-serve-static] ${msg}`);
@@ -172,6 +184,32 @@ async function runSpaChecks(port) {
   }
 }
 
+async function runCspChecks(port) {
+  const res = await fetch(`http://127.0.0.1:${port}/`);
+  await res.text();
+  const csp = res.headers.get("content-security-policy") ?? "";
+  const scriptSrc = csp
+    .split(";")
+    .map((d) => d.trim())
+    .find((d) => d.startsWith("script-src "));
+  if (!scriptSrc) {
+    throw new Error(`csp: no script-src directive in Content-Security-Policy: "${csp}"`);
+  }
+  // Room-key derivation runs argon2id compiled to WebAssembly; without
+  // 'wasm-unsafe-eval' every hosted install fails with DERIVATION_FAILED.
+  if (!scriptSrc.includes("'wasm-unsafe-eval'")) {
+    throw new Error(`csp: script-src missing 'wasm-unsafe-eval': "${scriptSrc}"`);
+  }
+  log("OK csp-wasm script-src carries 'wasm-unsafe-eval'");
+  // The inline SRI-diagnostic script must be allow-listed by its sha256.
+  if (!scriptSrc.includes(INLINE_SCRIPT_HASH)) {
+    throw new Error(
+      `csp: script-src missing inline-script hash ${INLINE_SCRIPT_HASH}: "${scriptSrc}"`,
+    );
+  }
+  log(`OK csp-inline-hash script-src carries ${INLINE_SCRIPT_HASH}`);
+}
+
 async function runDefaultCorsChecks(port) {
   // Same-origin: browsers send no Origin header, request must succeed.
   const sameOrigin = await fetchCors(port, "/api/healthz");
@@ -221,6 +259,7 @@ async function main() {
     log("phase 1: default self-host install (no PUBLIC_ORIGIN)");
     await withServer({}, clientDist, async (port) => {
       await runSpaChecks(port);
+      await runCspChecks(port);
       await runDefaultCorsChecks(port);
     });
 
