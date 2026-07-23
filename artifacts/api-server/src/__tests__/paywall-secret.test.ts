@@ -2,7 +2,9 @@
 import { describe, it, expect } from "vitest";
 import {
   assertPaywallSecretNotPlaceholder,
+  assertPaywallSecretConfiguredInProduction,
   isPlaceholderPaywallSecret,
+  MissingPaywallSecretError,
   PlaceholderPaywallSecretError,
   PAYWALL_SECRET_PLACEHOLDERS,
 } from "../lib/paywallSecret";
@@ -88,6 +90,71 @@ describe("assertPaywallSecretNotPlaceholder", () => {
       expect((err as PlaceholderPaywallSecretError).placeholder).toBe(
         "YOUR_STRONG_SECRET",
       );
+    }
+  });
+});
+
+// ── Production posture (Task #1143) ─────────────────────────────────────────
+// An unset PAYWALL_SECRET silently invalidates every host JWT and recovery
+// code on each restart. Fine for dev; in production it must be an explicit
+// choice (PAYWALL_ALLOW_EPHEMERAL_SECRET=1), never the accidental default.
+describe("assertPaywallSecretConfiguredInProduction", () => {
+  const real =
+    "9f1d4b6c2a5e7f8019283746556677889900aabbccddeeff112233445566aabb";
+
+  it("throws MissingPaywallSecretError in production when unset", () => {
+    expect(() =>
+      assertPaywallSecretConfiguredInProduction(undefined, "production", undefined),
+    ).toThrow(MissingPaywallSecretError);
+  });
+
+  it("throws in production when set but blank/whitespace-only", () => {
+    expect(() =>
+      assertPaywallSecretConfiguredInProduction("", "production", undefined),
+    ).toThrow(MissingPaywallSecretError);
+    expect(() =>
+      assertPaywallSecretConfiguredInProduction("   ", "production", undefined),
+    ).toThrow(MissingPaywallSecretError);
+  });
+
+  it("passes in production with a configured secret", () => {
+    expect(() =>
+      assertPaywallSecretConfiguredInProduction(real, "production", undefined),
+    ).not.toThrow();
+  });
+
+  it("passes in production when unset but explicitly opted into ephemeral", () => {
+    expect(() =>
+      assertPaywallSecretConfiguredInProduction(undefined, "production", "1"),
+    ).not.toThrow();
+  });
+
+  it("does not treat other truthy-looking opt-out values as consent", () => {
+    for (const notOne of ["true", "yes", "0", "", " 1"]) {
+      expect(
+        () =>
+          assertPaywallSecretConfiguredInProduction(undefined, "production", notOne),
+        `expected opt-out value ${JSON.stringify(notOne)} to be rejected`,
+      ).toThrow(MissingPaywallSecretError);
+    }
+  });
+
+  it("never throws outside production regardless of secret state", () => {
+    for (const env of [undefined, "development", "test", "staging"]) {
+      expect(() =>
+        assertPaywallSecretConfiguredInProduction(undefined, env, undefined),
+      ).not.toThrow();
+    }
+  });
+
+  it("the error message names both remediation paths", () => {
+    try {
+      assertPaywallSecretConfiguredInProduction(undefined, "production", undefined);
+      expect.fail("expected throw");
+    } catch (err) {
+      const msg = (err as Error).message;
+      expect(msg).toContain("PAYWALL_SECRET");
+      expect(msg).toContain("PAYWALL_ALLOW_EPHEMERAL_SECRET=1");
     }
   });
 });

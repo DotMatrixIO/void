@@ -55,6 +55,13 @@ interface Props {
    *  ceiling, so hosts don't pay for an extension the server will
    *  reject with EXTENSION_CAPPED. */
   extendPreview?: ExtendPreviewContext;
+  /** Task #1143: resume an interrupted paid flow. When set, the modal
+   *  skips the tier picker and invoice entirely, opens straight onto a
+   *  "checking your payment" state, and polls this hash. The server
+   *  re-includes the recovery code on status responses until the client
+   *  acks receipt, so a host who refreshed mid-flow still sees their
+   *  code before entering the room. */
+  resumePaymentHash?: string;
 }
 
 type Phase = "choosing" | "loading" | "waiting" | "paid" | "error";
@@ -113,14 +120,14 @@ function computeExtendPreview(
   };
 }
 
-export default function PaywallModal({ onSuccess, onClose, headerLabel, successLabel, extendPreview }: Props) {
+export default function PaywallModal({ onSuccess, onClose, headerLabel, successLabel, extendPreview, resumePaymentHash }: Props) {
   const ctaCopy = successLabel ?? "OPEN ROOM";
-  const [phase, setPhase] = useState<Phase>("choosing");
+  const [phase, setPhase] = useState<Phase>(resumePaymentHash ? "waiting" : "choosing");
   const headerCopy =
     phase === "paid" ? "✓ PAID — ROOM READY" : headerLabel ?? "⚡ HOST A ROOM";
   const [tier, setTier] = useState<Tier>("standard");
   const [invoice, setInvoice] = useState("");
-  const [paymentHash, setPaymentHash] = useState("");
+  const [paymentHash, setPaymentHash] = useState(resumePaymentHash ?? "");
   const [amountSats, setAmountSats] = useState<number>(1000);
   const [errorMsg, setErrorMsg] = useState("");
   // True when the last error was the typed 503 LIGHTNING_BACKEND_UNAVAILABLE
@@ -337,6 +344,12 @@ export default function PaywallModal({ onSuccess, onClose, headerLabel, successL
         stopPolling();
         setPhase("paid");
         sessionStorage.setItem("void_token", data.token);
+        // Task #1143: remember which payment this token came from so a
+        // refresh (or dismiss) before the room opens can resume this exact
+        // paid flow — and re-fetch the recovery code, which the server keeps
+        // including on status responses until we ack receipt in
+        // proceedFromPaid. Cleared alongside the ack.
+        sessionStorage.setItem("void_payment_hash", paymentHash);
         setPaidToken(data.token);
         // The recovery code is the host's only way to resume this paid
         // window without re-paying. Hold the modal open until they
@@ -450,13 +463,27 @@ export default function PaywallModal({ onSuccess, onClose, headerLabel, successL
   // not survive the modal longer than the user's eyes need them.
   const proceedFromPaid = useCallback(() => {
     const t = paidToken;
+    // Task #1143: the host is leaving the PAID screen — the recovery code
+    // has been on screen (or they explicitly skipped it). Ack receipt so
+    // the server deletes its delivery copy and no later status poll can
+    // re-obtain the code. Fire-and-forget: if the ack is lost, the only
+    // consequence is that a future resume shows the code again — safe,
+    // and still bounded by the paid window.
+    if (paymentHash) {
+      fetch(apiUrl("/api/paywall/ack-recovery"), {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ paymentHash }),
+      }).catch(() => {});
+    }
+    sessionStorage.removeItem("void_payment_hash");
     setRecoveryCode(null);
     setRecoveryDetailsOpen(false);
     setConfirmSkip(false);
     setRecoveryCopyFailed(false);
     setPaidToken(null);
     if (t && mountedRef.current) onSuccess(t);
-  }, [paidToken, onSuccess]);
+  }, [paidToken, paymentHash, onSuccess]);
 
   // X / ESC / backdrop behavior is phase-aware: on the PAID screen dismissing
   // enters the room (the host already paid — closing would abandon it), through
@@ -797,6 +824,98 @@ export default function PaywallModal({ onSuccess, onClose, headerLabel, successL
             </>
           )}
 
+          {/* Task #1143: resume path — a refresh (or dismissed paid modal)
+              left a paid-but-not-opened payment behind. There is no invoice
+              to show; we simply poll the stored hash until the server hands
+              the token (and the still-unacked recovery code) back. */}
+          {phase === "waiting" && !invoice && (
+            <>
+              <div
+                data-testid="resume-checking"
+                style={{ fontSize: "13px", letterSpacing: "3px", color: "var(--fg-dim)", textAlign: "center", padding: "20px 0" }}
+              >
+                CHECKING YOUR PAYMENT ·{" "}
+                <span
+                  style={{
+                    display: "inline-block",
+                    width: "6px",
+                    height: "6px",
+                    background: "var(--teal)",
+                    borderRadius: 0,
+                    animation: "void-blink 1s step-start infinite",
+                    verticalAlign: "middle",
+                  }}
+                />
+              </div>
+              <div
+                data-testid="privacy-delay-note"
+                style={{
+                  width: "100%",
+                  boxSizing: "border-box",
+                  fontFamily: "var(--font-mono)",
+                  fontSize: "11px",
+                  letterSpacing: "1px",
+                  color: "var(--fg-dim)",
+                  lineHeight: 1.6,
+                  textAlign: "center",
+                }}
+              >
+                After you pay, confirmation can take up to a minute. That pause
+                is deliberate — a random delay that keeps the exact moment of
+                your payment private.
+              </div>
+              {pollFailures >= STATUS_POLL_FAILURE_THRESHOLD && (
+                <div
+                  data-testid="status-check-failing"
+                  role="status"
+                  aria-live="polite"
+                  style={{
+                    width: "100%",
+                    boxSizing: "border-box",
+                    fontFamily: "var(--font-mono)",
+                    fontSize: "11px",
+                    letterSpacing: "1px",
+                    color: "var(--fg-on-dark)",
+                    lineHeight: 1.6,
+                    textAlign: "center",
+                    border: "2px solid var(--gold)",
+                    background: "var(--surface-dark)",
+                    padding: "10px 12px",
+                    display: "flex",
+                    flexDirection: "column",
+                    gap: "10px",
+                  }}
+                >
+                  <div>
+                    Couldn’t confirm your payment yet — we’re having trouble
+                    reaching the payment server. If you’ve already paid, keep
+                    this open and we’ll keep checking, or check now.
+                  </div>
+                  <button
+                    data-testid="status-check-now"
+                    onClick={handleManualCheck}
+                    disabled={manualChecking}
+                    aria-disabled={manualChecking}
+                    style={{
+                      background: manualChecking ? "var(--surface)" : "var(--gold)",
+                      color: manualChecking ? "var(--fg-dim)" : "var(--surface-dark)",
+                      border: "3px solid var(--gold)",
+                      fontFamily: "var(--font-mono)",
+                      fontSize: "14px",
+                      letterSpacing: "2px",
+                      padding: "10px 14px",
+                      cursor: manualChecking ? "wait" : "pointer",
+                      fontWeight: 700,
+                      width: "100%",
+                    }}
+                  >
+                    {manualChecking ? "CHECKING…" : "CHECK NOW"}
+                  </button>
+                </div>
+              )}
+            </>
+          )}
+
           {phase === "waiting" && invoice && (
             <>
               {/* Pricing tag — heavy gold box, appropriate while the host is
@@ -878,6 +997,30 @@ export default function PaywallModal({ onSuccess, onClose, headerLabel, successL
                     verticalAlign: "middle",
                   }}
                 />
+              </div>
+
+              {/* Task #1143: static privacy-delay note. Rendered from the
+                  moment the invoice appears and NEVER changed, added, or
+                  removed at settlement time — its presence and timing must
+                  carry zero information about whether the payment has
+                  settled (the delay itself is the M-04 anti-correlation
+                  mitigation this copy explains). */}
+              <div
+                data-testid="privacy-delay-note"
+                style={{
+                  width: "100%",
+                  boxSizing: "border-box",
+                  fontFamily: "var(--font-mono)",
+                  fontSize: "11px",
+                  letterSpacing: "1px",
+                  color: "var(--fg-dim)",
+                  lineHeight: 1.6,
+                  textAlign: "center",
+                }}
+              >
+                After you pay, confirmation can take up to a minute. That pause
+                is deliberate — a random delay that keeps the exact moment of
+                your payment private.
               </div>
 
               {/* Status-check failure banner. Surfaces once the polling loop

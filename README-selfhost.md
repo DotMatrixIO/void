@@ -961,7 +961,8 @@ VOID is human-only; all agent code has been removed.
 | Variable | Required | Typical Value | What It Does | If Unset |
 |---|---|---|---|---|
 | `LIGHTNING_BACKEND` | Yes, for predictable behavior | `mock`, `lnbits`, or `btcpay` | Selects Lightning backend adapter | Often defaults to mock |
-| `PAYWALL_SECRET` | Yes in production | random 32-byte hex string | JWT signing secret for host authorization | An ephemeral secret is auto-generated at startup — do not rely on this for production |
+| `PAYWALL_SECRET` | Yes in production | random 32-byte hex string | JWT signing secret for host authorization | In production (`NODE_ENV=production`) the server **refuses to start** unless `PAYWALL_ALLOW_EPHEMERAL_SECRET=1` is also set. Outside production, an ephemeral secret is auto-generated per process (all host JWTs and recovery codes are invalidated on every restart) |
+| `PAYWALL_ALLOW_EPHEMERAL_SECRET` | No | `1` | Explicit opt-in to run production **without** a configured `PAYWALL_SECRET`, accepting that every restart invalidates all outstanding host JWTs and recovery codes. Only the exact value `1` counts | Production startup fails when `PAYWALL_SECRET` is unset |
 | `LNBITS_URL` | Required for LNbits | `http://lnbits-host:port` | LNbits base URL. For a Start9/StartOS LNbits reached over Tailscale use `https://<hostname>` (not a raw `100.x` IP) — see "Reaching LNbits over Tailscale" in the LNbits section | Ignored unless backend is `lnbits` |
 | `LNBITS_API_KEY` | Required for LNbits | secret value | LNbits API key | Ignored unless backend is `lnbits` |
 | `BTCPAY_URL` | Required for BTCPay | `https://btcpay.your-domain.example` | BTCPay base URL | Ignored unless backend is `btcpay` |
@@ -1280,7 +1281,7 @@ openssl rand -hex 32
 
 The API server refuses to start if either `TURN_SECRET` or `PAYWALL_SECRET` is set to one of the known placeholder strings shipped in this README and the example configs (`YOUR_SECRET_HERE`, `REPLACE_WITH_LONG_RANDOM_SECRET`, `YOUR_STRONG_SECRET`, `changeme`, etc.). The server logs a `FATAL` line naming the offending variable and exits before any port is bound. If you see that log, generate a real secret with `openssl rand -hex 32` and try again.
 
-`PAYWALL_SECRET` may be left unset on a single-instance deployment — the server then synthesizes a strong ephemeral secret per process (JWTs are invalidated on restart, by design). The placeholder check runs whether or not the variable is set, so an empty `PAYWALL_SECRET=` is fine but `PAYWALL_SECRET=REPLACE_ME` is not.
+In **production** (`NODE_ENV=production`), `PAYWALL_SECRET` must be set: the server refuses to start when it is unset or blank, logging a `FATAL` line before any port is bound. An unset secret means the server synthesizes a fresh ephemeral secret per process — every restart silently invalidates all outstanding host JWTs **and all 4-word recovery codes**, stranding paying hosts. If you genuinely want that single-instance dev/demo behavior in production, opt in explicitly with `PAYWALL_ALLOW_EPHEMERAL_SECRET=1`. Outside production, leaving `PAYWALL_SECRET` unset remains fine. The placeholder check runs whether or not the variable is set, so `PAYWALL_SECRET=REPLACE_ME` is rejected in any environment.
 
 ### TLS Everywhere
 

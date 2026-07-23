@@ -20,9 +20,10 @@ the response also includes the newly minted JWT, the tier that
 was paid for, the absolute expiry of the paid window, and a
 one-time `recoveryCode` (4 BIP-39 words) that can be used
 once via `POST /paywall/recover` to remint a fresh JWT for the
-same window. The `recoveryCode` is only present on the **first**
-poll-confirm; subsequent polls of the same hash return the
-token without it.
+same window. The `recoveryCode` is included on **every**
+`paid: true` response until the client acknowledges receipt
+via `POST /paywall/ack-recovery`; after the ack it is deleted
+server-side and never returned again.
 
  */
 export interface PaymentStatus {
@@ -34,9 +35,10 @@ Valid for 1 hour (`standard`) or 24 hours (`day`), matching the room TTL.
   /** Tier that was paid for. Present iff `paid` is `true`. */
   tier?: PaymentStatusTier;
   /** One-time 4-word BIP-39 recovery code (lowercase, single
-spaces). Present only on the first `paid: true` response
-for a given payment hash. Show this to the user once and
-never persist it on the client.
+spaces). Present on every `paid: true` response until the
+client acknowledges receipt via `POST /paywall/ack-recovery`,
+never after. Show this to the user and never persist it on
+the client.
  */
   recoveryCode?: string;
   /** Absolute expiry of the paid window, Unix milliseconds. Present iff `paid` is `true`. */

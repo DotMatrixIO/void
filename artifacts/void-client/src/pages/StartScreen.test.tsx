@@ -26,7 +26,14 @@ vi.mock("@/components/HamburgerMenu", () => ({
 }));
 
 vi.mock("@/components/PaywallModal", () => ({
-  default: () => null,
+  // Task #1143: render an inspectable stub so the host-flow tests can assert
+  // WHETHER the paywall opened and whether it opened in resume mode.
+  default: (props: { resumePaymentHash?: string }) => (
+    <div
+      data-testid="paywall-modal-stub"
+      data-resume-hash={props.resumePaymentHash ?? ""}
+    />
+  ),
 }));
 
 import StartScreen from "./StartScreen";
@@ -801,5 +808,86 @@ describe("StartScreen accessibility audit (axe)", () => {
     );
     expect(getRecoverySlot(0)).toBeInTheDocument();
     await expectNoAxeViolations(container);
+  });
+});
+
+// ---------------------------------------------------------------------------
+// Task #1143: HOST A ROOM stale-token hygiene + interrupted-flow resume.
+// Root cause of the refresh-persistent dead button: a stale sessionStorage
+// void_token was treated as a live payment and short-circuited straight into
+// the (doomed) create path, and nothing ever cleared it.
+// ---------------------------------------------------------------------------
+describe("StartScreen HOST A ROOM token hygiene (Task #1143)", () => {
+  function makeToken(expSecondsFromNow: number): string {
+    const b64 = (obj: unknown) =>
+      btoa(JSON.stringify(obj)).replace(/\+/g, "-").replace(/\//g, "_").replace(/=+$/, "");
+    return `${b64({ alg: "HS256" })}.${b64({ exp: Math.floor(Date.now() / 1000) + expSecondsFromNow })}.sig`;
+  }
+
+  beforeEach(() => {
+    sessionStorage.clear();
+  });
+  afterEach(() => {
+    sessionStorage.clear();
+  });
+
+  it("clears an expired stored token (and hash) and reopens the paywall fresh", async () => {
+    const user = userEvent.setup();
+    sessionStorage.setItem("void_token", makeToken(-60));
+    sessionStorage.setItem("void_payment_hash", "stale-hash");
+    const onJoinRoom = vi.fn();
+    render(<StartScreen onJoinRoom={onJoinRoom} />);
+
+    await user.click(screen.getByRole("button", { name: /HOST A ROOM/i }));
+
+    // Stale state is gone, paywall opened in FRESH mode (no resume hash),
+    // and we never dead-ended into the host path with a dead token.
+    expect(sessionStorage.getItem("void_token")).toBeNull();
+    expect(sessionStorage.getItem("void_payment_hash")).toBeNull();
+    const stub = screen.getByTestId("paywall-modal-stub");
+    expect(stub.getAttribute("data-resume-hash")).toBe("");
+    expect(onJoinRoom).not.toHaveBeenCalled();
+  });
+
+  it("clears a garbage stored token the same way", async () => {
+    const user = userEvent.setup();
+    sessionStorage.setItem("void_token", "not-a-jwt");
+    const onJoinRoom = vi.fn();
+    render(<StartScreen onJoinRoom={onJoinRoom} />);
+
+    await user.click(screen.getByRole("button", { name: /HOST A ROOM/i }));
+
+    expect(sessionStorage.getItem("void_token")).toBeNull();
+    expect(screen.getByTestId("paywall-modal-stub")).toBeInTheDocument();
+    expect(onJoinRoom).not.toHaveBeenCalled();
+  });
+
+  it("resumes the paywall against a pending payment hash when the token is live but unacked", async () => {
+    const user = userEvent.setup();
+    sessionStorage.setItem("void_token", makeToken(3600));
+    sessionStorage.setItem("void_payment_hash", "pending-hash");
+    const onJoinRoom = vi.fn();
+    render(<StartScreen onJoinRoom={onJoinRoom} />);
+
+    await user.click(screen.getByRole("button", { name: /HOST A ROOM/i }));
+
+    const stub = screen.getByTestId("paywall-modal-stub");
+    expect(stub.getAttribute("data-resume-hash")).toBe("pending-hash");
+    // The interrupted flow resumes through the modal, not straight into hosting.
+    expect(onJoinRoom).not.toHaveBeenCalled();
+  });
+
+  it("proceeds straight to hosting with a live token and no pending hash", async () => {
+    const user = userEvent.setup();
+    sessionStorage.setItem("void_token", makeToken(3600));
+    const onJoinRoom = vi.fn();
+    render(<StartScreen onJoinRoom={onJoinRoom} />);
+
+    await user.click(screen.getByRole("button", { name: /HOST A ROOM/i }));
+
+    await vi.waitFor(() => {
+      expect(onJoinRoom).toHaveBeenCalledTimes(1);
+    });
+    expect(screen.queryByTestId("paywall-modal-stub")).not.toBeInTheDocument();
   });
 });

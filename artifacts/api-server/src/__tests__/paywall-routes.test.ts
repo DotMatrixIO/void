@@ -378,7 +378,9 @@ describe("recovery code lifecycle", () => {
   // These guard the core "never extend the paid window" property of Task #117.
   // A host who refreshes the paywall modal (or whose client retries the poll)
   // must NOT be able to mint a fresh JWT with a later expiry, downgrade the
-  // tier they paid for, or get a second recovery code.
+  // tier they paid for, or get a SECOND (different) recovery code. Since
+  // Task #1143 the SAME code is re-included until the client acks receipt —
+  // see the ack-recovery describe block below for the full delivery matrix.
 
   it("re-polling /paywall/status returns the same token and expiresAt", async () => {
     const first = await payAndIssue("standard");
@@ -390,16 +392,87 @@ describe("recovery code lifecycle", () => {
     expect(repoll.expiresAt).toBe(first.expiresAt);
   });
 
-  it("re-polling /paywall/status does NOT reveal a second recovery code", async () => {
+  it("re-polling /paywall/status re-includes the SAME code until acked, never mints a second", async () => {
     const first = await payAndIssue("standard");
     const paymentHash = first.paymentHash;
     const codeCountBefore = __testing.recoveryCodes.size;
     const second = await getJson(`${baseUrl}/api/paywall/status/${paymentHash}`);
     expect(second.status).toBe(200);
     const repoll = second.body as { recoveryCode?: string };
-    expect(repoll.recoveryCode).toBeUndefined();
+    // Task #1143 ack-based delivery: before the ack, the re-poll carries the
+    // IDENTICAL code (delivery-race fix) — never a fresh one.
+    expect(repoll.recoveryCode).toBe(first.recoveryCode);
     // The map size must not have grown — no second code was minted.
     expect(__testing.recoveryCodes.size).toBe(codeCountBefore);
+
+    // After the ack, the code disappears from status responses forever.
+    const ack = await postJson(`${baseUrl}/api/paywall/ack-recovery`, { paymentHash });
+    expect(ack.status).toBe(200);
+    expect(ack.body).toEqual({ ok: true });
+    const third = await getJson(`${baseUrl}/api/paywall/status/${paymentHash}`);
+    expect((third.body as { recoveryCode?: string }).recoveryCode).toBeUndefined();
+  });
+
+  // ── Ack-recovery abuse matrix (Task #1143) ────────────────────────────────
+  it("replayed acks are idempotent and never re-expose the code or touch expiry", async () => {
+    const issued = await payAndIssue("standard");
+    const paymentHash = issued.paymentHash;
+    const stateBefore = __testing.invoiceStates.get(paymentHash);
+    const expiresBefore = stateBefore!.settled!.expiresAt;
+
+    // First ack deletes the delivery copy.
+    const ack1 = await postJson(`${baseUrl}/api/paywall/ack-recovery`, { paymentHash });
+    expect(ack1.body).toEqual({ ok: true });
+    expect(__testing.invoiceStates.get(paymentHash)!.settled!.recoveryCode).toBeUndefined();
+
+    // Replayed acks: identical response, no state change, no expiry change.
+    for (let i = 0; i < 3; i++) {
+      const ackN = await postJson(`${baseUrl}/api/paywall/ack-recovery`, { paymentHash });
+      expect(ackN.status).toBe(200);
+      expect(ackN.body).toEqual({ ok: true });
+    }
+    const stateAfter = __testing.invoiceStates.get(paymentHash)!;
+    expect(stateAfter.settled!.expiresAt).toBe(expiresBefore);
+
+    // An attacker replaying status polls after the ack never re-obtains the code…
+    const poll = await getJson(`${baseUrl}/api/paywall/status/${paymentHash}`);
+    const body = poll.body as { token: string; expiresAt: number; recoveryCode?: string };
+    expect(body.recoveryCode).toBeUndefined();
+    // …and the token/window are untouched (no extension via ack/poll games).
+    expect(body.token).toBe(issued.token);
+    expect(body.expiresAt).toBe(expiresBefore);
+
+    // The REDEEMABLE copy is unaffected by acks — the code still redeems once.
+    const redeem = await postJson(`${baseUrl}/api/paywall/recover`, { code: issued.recoveryCode });
+    expect(redeem.status).toBe(200);
+    expect((redeem.body as RecoverOk).expiresAt).toBe(expiresBefore);
+  });
+
+  it("ack responds { ok: true } identically for unknown, malformed, and unpaid hashes", async () => {
+    // Unknown well-formed hash.
+    const unknown = await postJson(`${baseUrl}/api/paywall/ack-recovery`, {
+      paymentHash: "f".repeat(64),
+    });
+    expect(unknown.status).toBe(200);
+    expect(unknown.body).toEqual({ ok: true });
+
+    // Malformed hashes and bodies — same response, no oracle.
+    for (const bad of ["../etc/passwd", "", 42, null, undefined]) {
+      const res = await postJson(`${baseUrl}/api/paywall/ack-recovery`, { paymentHash: bad });
+      expect(res.status).toBe(200);
+      expect(res.body).toEqual({ ok: true });
+    }
+
+    // Unpaid invoice: ack is a no-op — a later settlement still delivers the code.
+    const inv = await postJson(`${baseUrl}/api/paywall/invoice`, { tier: "standard" });
+    const { paymentHash } = inv.body as InvoiceOk;
+    const preAck = await postJson(`${baseUrl}/api/paywall/ack-recovery`, { paymentHash });
+    expect(preAck.body).toEqual({ ok: true });
+    expect(simulatePayment(paymentHash)).toBe(true);
+    const status = await getJson(`${baseUrl}/api/paywall/status/${paymentHash}`);
+    const ok = status.body as StatusOk;
+    expect(ok.paid).toBe(true);
+    expect(ok.recoveryCode).toMatch(/^[a-z]+ [a-z]+ [a-z]+ [a-z]+$/);
   });
 
   it("re-polling preserves the paid tier (day stays day, never downgrades)", async () => {
@@ -617,8 +690,9 @@ describe("duplicate / replayed settlement is idempotent", () => {
     expect(secondOk.token).toBe(firstOk.token);
     expect(secondOk.expiresAt).toBe(firstOk.expiresAt);
     expect(secondOk.tier).toBe("day");
-    // The recovery code is shown exactly once — the replay must not leak a new one.
-    expect(secondOk.recoveryCode).toBeUndefined();
+    // Task #1143: until the client acks receipt, the replay re-delivers the
+    // SAME code — never a fresh one (map size unchanged).
+    expect(secondOk.recoveryCode).toBe(firstOk.recoveryCode);
     expect(__testing.recoveryCodes.size).toBe(codeCountAfterFirst);
   });
 });

@@ -1270,3 +1270,135 @@ describe("PaywallModal status-poll failure banner", () => {
     expect(screen.getByText(/WAITING FOR PAYMENT/i)).toBeInTheDocument();
   });
 });
+
+// ---------------------------------------------------------------------------
+// Task #1143: interrupted-flow resume + ack-based recovery-code delivery +
+// static privacy-delay copy.
+// ---------------------------------------------------------------------------
+describe("PaywallModal resume + ack (Task #1143)", () => {
+  beforeEach(() => {
+    sessionStorage.clear();
+    vi.useFakeTimers({
+      toFake: ["setTimeout", "clearTimeout", "setInterval", "clearInterval", "Date"],
+    });
+  });
+  afterEach(() => {
+    vi.useRealTimers();
+    vi.unstubAllGlobals();
+    sessionStorage.clear();
+  });
+
+  function setupResumeFetch(opts: { recoveryCode?: string | null } = {}) {
+    const ackCalls: string[] = [];
+    const fetchMock = vi.fn((input: RequestInfo | URL, init?: RequestInit) => {
+      const url = typeof input === "string" ? input : input.toString();
+      if (url.includes("/api/paywall/ack-recovery")) {
+        ackCalls.push(String(init?.body ?? ""));
+        return Promise.resolve({ ok: true, json: () => Promise.resolve({ ok: true }) } as Response);
+      }
+      if (url.includes("/api/paywall/status/")) {
+        return Promise.resolve({
+          ok: true,
+          status: 200,
+          json: () =>
+            Promise.resolve({
+              paid: true,
+              token: "tok-resume",
+              recoveryCode: opts.recoveryCode ?? "able above abandon ability",
+            }),
+        } as Response);
+      }
+      return Promise.resolve({ ok: false, json: () => Promise.resolve({}) } as Response);
+    });
+    vi.stubGlobal("fetch", fetchMock);
+    return { fetchMock, ackCalls };
+  }
+
+  it("opens straight onto the resume screen — no tier picker, no invoice request", async () => {
+    const { fetchMock } = setupResumeFetch();
+    render(
+      <PaywallModal onSuccess={() => {}} onClose={() => {}} resumePaymentHash="hash-resume" />,
+    );
+    expect(screen.getByTestId("resume-checking")).toBeInTheDocument();
+    expect(screen.getByTestId("privacy-delay-note")).toBeInTheDocument();
+    expect(screen.queryByRole("button", { name: "CONTINUE" })).not.toBeInTheDocument();
+    const invoiceCalls = fetchMock.mock.calls.filter((c) =>
+      String(c[0] ?? "").includes("/paywall/invoice"),
+    );
+    expect(invoiceCalls).toHaveLength(0);
+  });
+
+  it("polls the resume hash to the paid screen, then acks + clears the stored hash on proceed", async () => {
+    const onSuccess = vi.fn();
+    const { fetchMock, ackCalls } = setupResumeFetch();
+    render(
+      <PaywallModal onSuccess={onSuccess} onClose={() => {}} resumePaymentHash="hash-resume" />,
+    );
+
+    // First poll tick settles the payment.
+    await act(async () => {
+      vi.advanceTimersByTime(3000);
+    });
+    await flushMicrotasks();
+
+    // Paid screen with the still-unacked recovery code re-fetched from the server.
+    expect(
+      screen.getByRole("button", {
+        name: /PAYMENT DETAILS \(including one-time recovery code\)/i,
+      }),
+    ).toBeInTheDocument();
+    const statusCalls = fetchMock.mock.calls.filter((c) =>
+      String(c[0] ?? "").includes("/paywall/status/hash-resume"),
+    );
+    expect(statusCalls.length).toBeGreaterThan(0);
+    expect(sessionStorage.getItem("void_token")).toBe("tok-resume");
+    expect(sessionStorage.getItem("void_payment_hash")).toBe("hash-resume");
+
+    // Open the details (so OPEN ROOM doesn't route through the never-saw-it
+    // confirmation), then proceed: exactly one ack carrying the hash.
+    expandRecoveryDetails();
+    fireEvent.click(screen.getByRole("button", { name: "OPEN ROOM" }));
+    await flushMicrotasks();
+    expect(ackCalls).toHaveLength(1);
+    expect(ackCalls[0]).toContain("hash-resume");
+    expect(sessionStorage.getItem("void_payment_hash")).toBeNull();
+    expect(onSuccess).toHaveBeenCalledWith("tok-resume");
+  });
+
+  it("shows the identical static privacy-delay note on the normal invoice waiting screen", async () => {
+    const fetchMock = vi.fn((input: RequestInfo | URL) => {
+      const url = typeof input === "string" ? input : input.toString();
+      if (url.includes("/api/paywall/invoice")) {
+        return Promise.resolve({
+          ok: true,
+          status: 200,
+          json: () =>
+            Promise.resolve({ invoice: "lnbc1x", paymentHash: "hash-x", amountSats: 1000 }),
+        } as Response);
+      }
+      if (url.includes("/api/paywall/status/")) {
+        return Promise.resolve({
+          ok: true,
+          status: 200,
+          json: () => Promise.resolve({ paid: false }),
+        } as Response);
+      }
+      return Promise.resolve({ ok: false, json: () => Promise.resolve({}) } as Response);
+    });
+    vi.stubGlobal("fetch", fetchMock);
+
+    render(<PaywallModal onSuccess={() => {}} onClose={() => {}} />);
+    fireEvent.click(screen.getByRole("button", { name: "CONTINUE" }));
+    await flushMicrotasks();
+
+    const note = screen.getByTestId("privacy-delay-note");
+    expect(note).toHaveTextContent(/random delay/i);
+    // Static copy: still present, verbatim, after unpaid polls — its
+    // presence must never signal settlement state.
+    await act(async () => {
+      vi.advanceTimersByTime(3000);
+    });
+    await flushMicrotasks();
+    expect(screen.getByTestId("privacy-delay-note")).toHaveTextContent(/random delay/i);
+  });
+});

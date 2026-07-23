@@ -14,6 +14,7 @@ import { getSocket } from "@/lib/socket";
 import { resumeAudio } from "@/lib/sounds";
 import { uiClick } from "@/lib/uiSounds";
 import PaywallModal from "@/components/PaywallModal";
+import { tokenLooksExpired } from "@/lib/paywallToken";
 import Bip39PhraseGrid, {
   emptyPhraseSlots,
   splitPhraseTokens,
@@ -118,6 +119,9 @@ export default function StartScreen({ onJoinRoom, sessionNotice, onDismissNotice
   const [error, setError] = useState("");
   const [loading, setLoading] = useState(false);
   const [showPaywall, setShowPaywall] = useState(false);
+  // Task #1143: when set, the paywall modal resumes an interrupted paid
+  // flow (polls this hash instead of showing the tier picker).
+  const [resumeHash, setResumeHash] = useState<string | null>(null);
   // Task #250: clipboard-readability warning. The first time on this
   // browser that a user pastes a multi-word phrase into the join grid,
   // surface a one-time toast that names the clipboard-extension surface
@@ -300,9 +304,30 @@ export default function StartScreen({ onJoinRoom, sessionNotice, onDismissNotice
     resumeAudio();
     uiClick();
     setError("");
-    const existing = sessionStorage.getItem("void_token");
+    // Task #1143: presence of a stored token is NOT proof of a usable
+    // payment. An expired (or garbage) token used to silently dead-end the
+    // whole flow: proceedToHost → create-room rejected → nothing cleared
+    // the token → every later click (and refresh — sessionStorage survives
+    // refresh) took the same dead path. Vet it locally first and clear
+    // stale state so the paywall reopens cleanly.
+    let existing = sessionStorage.getItem("void_token");
+    if (existing && tokenLooksExpired(existing)) {
+      sessionStorage.removeItem("void_token");
+      sessionStorage.removeItem("void_payment_hash");
+      existing = null;
+    }
     if (existing) {
-      proceedToHost();
+      // A stored payment hash means the paid flow was interrupted before
+      // the host opened the room (refresh or dismissed modal). Resume the
+      // modal against that hash so the recovery code — still unacked
+      // server-side — is shown before entering the room.
+      const pendingHash = sessionStorage.getItem("void_payment_hash");
+      if (pendingHash) {
+        setResumeHash(pendingHash);
+        setShowPaywall(true);
+      } else {
+        proceedToHost();
+      }
     } else {
       setShowPaywall(true);
     }
@@ -316,6 +341,7 @@ export default function StartScreen({ onJoinRoom, sessionNotice, onDismissNotice
     // clearnet hosts were never promised network-layer privacy, so the note
     // would just be noise for them.
     if (isOnionOrigin()) markPaidCreateOnion();
+    setResumeHash(null);
     proceedToHost();
   }
 
@@ -645,7 +671,11 @@ export default function StartScreen({ onJoinRoom, sessionNotice, onDismissNotice
       {showPaywall && (
         <PaywallModal
           onSuccess={handlePaywallSuccess}
-          onClose={() => setShowPaywall(false)}
+          onClose={() => {
+            setShowPaywall(false);
+            setResumeHash(null);
+          }}
+          resumePaymentHash={resumeHash ?? undefined}
         />
       )}
       {scanOpen && (

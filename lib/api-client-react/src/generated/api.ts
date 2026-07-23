@@ -24,6 +24,8 @@ import type {
 } from "@tanstack/react-query";
 
 import type {
+  AckRecoveryRequest,
+  AckRecoveryResponse,
   DevPaymentResult,
   ErrorResponse,
   HealthStatus,
@@ -313,6 +315,14 @@ but unpaid invoice would receive. This is intentional —
 clients are expected to poll and never need a "not found"
 signal — and means there is no 404 response for this route.
 
+Recovery-code delivery is acknowledgment-based: every
+`paid: true` response for a given `paymentHash` includes the
+one-time `recoveryCode` until the client confirms receipt via
+`POST /paywall/ack-recovery`, after which the code is deleted
+server-side and never returned again. Re-inclusion never
+extends any expiry — the token and `expiresAt` are identical
+on every poll.
+
  * @summary Poll for invoice payment, returning a JWT once paid
  */
 export const getGetPaymentStatusUrl = (paymentHash: string) => {
@@ -400,6 +410,106 @@ export function useGetPaymentStatus<
 
   return { ...query, queryKey: queryOptions.queryKey };
 }
+
+/**
+ * Confirms that the client has displayed the `recoveryCode`
+returned by `GET /paywall/status/{paymentHash}`. After a
+successful ack the server deletes its delivery copy of the
+code, and subsequent status polls for the same hash never
+include a `recoveryCode` again. The redeemable copy used by
+`POST /paywall/recover` is unaffected — the code remains valid
+for exactly one redemption within the paid window.
+
+The response is `{ ok: true }` unconditionally — for unknown
+hashes, unpaid hashes, malformed hashes, and repeated acks
+alike — so the endpoint cannot be used as an oracle for
+invoice existence or payment state. Acks are idempotent and
+never modify any expiry.
+
+ * @summary Acknowledge receipt of the one-time recovery code
+ */
+export const getAckRecoveryCodeUrl = () => {
+  return `/api/paywall/ack-recovery`;
+};
+
+export const ackRecoveryCode = async (
+  ackRecoveryRequest: AckRecoveryRequest,
+  options?: RequestInit,
+): Promise<AckRecoveryResponse> => {
+  return customFetch<AckRecoveryResponse>(getAckRecoveryCodeUrl(), {
+    ...options,
+    method: "POST",
+    headers: { "Content-Type": "application/json", ...options?.headers },
+    body: JSON.stringify(ackRecoveryRequest),
+  });
+};
+
+export const getAckRecoveryCodeMutationOptions = <
+  TError = ErrorType<unknown>,
+  TContext = unknown,
+>(options?: {
+  mutation?: UseMutationOptions<
+    Awaited<ReturnType<typeof ackRecoveryCode>>,
+    TError,
+    { data: BodyType<AckRecoveryRequest> },
+    TContext
+  >;
+  request?: SecondParameter<typeof customFetch>;
+}): UseMutationOptions<
+  Awaited<ReturnType<typeof ackRecoveryCode>>,
+  TError,
+  { data: BodyType<AckRecoveryRequest> },
+  TContext
+> => {
+  const mutationKey = ["ackRecoveryCode"];
+  const { mutation: mutationOptions, request: requestOptions } = options
+    ? options.mutation &&
+      "mutationKey" in options.mutation &&
+      options.mutation.mutationKey
+      ? options
+      : { ...options, mutation: { ...options.mutation, mutationKey } }
+    : { mutation: { mutationKey }, request: undefined };
+
+  const mutationFn: MutationFunction<
+    Awaited<ReturnType<typeof ackRecoveryCode>>,
+    { data: BodyType<AckRecoveryRequest> }
+  > = (props) => {
+    const { data } = props ?? {};
+
+    return ackRecoveryCode(data, requestOptions);
+  };
+
+  return { mutationFn, ...mutationOptions };
+};
+
+export type AckRecoveryCodeMutationResult = NonNullable<
+  Awaited<ReturnType<typeof ackRecoveryCode>>
+>;
+export type AckRecoveryCodeMutationBody = BodyType<AckRecoveryRequest>;
+export type AckRecoveryCodeMutationError = ErrorType<unknown>;
+
+/**
+ * @summary Acknowledge receipt of the one-time recovery code
+ */
+export const useAckRecoveryCode = <
+  TError = ErrorType<unknown>,
+  TContext = unknown,
+>(options?: {
+  mutation?: UseMutationOptions<
+    Awaited<ReturnType<typeof ackRecoveryCode>>,
+    TError,
+    { data: BodyType<AckRecoveryRequest> },
+    TContext
+  >;
+  request?: SecondParameter<typeof customFetch>;
+}): UseMutationResult<
+  Awaited<ReturnType<typeof ackRecoveryCode>>,
+  TError,
+  { data: BodyType<AckRecoveryRequest> },
+  TContext
+> => {
+  return useMutation(getAckRecoveryCodeMutationOptions(options));
+};
 
 /**
  * Redeems the 4-word BIP-39 recovery code that was returned alongside

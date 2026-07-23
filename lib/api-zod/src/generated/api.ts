@@ -103,6 +103,14 @@ but unpaid invoice would receive. This is intentional —
 clients are expected to poll and never need a "not found"
 signal — and means there is no 404 response for this route.
 
+Recovery-code delivery is acknowledgment-based: every
+`paid: true` response for a given `paymentHash` includes the
+one-time `recoveryCode` until the client confirms receipt via
+`POST /paywall/ack-recovery`, after which the code is deleted
+server-side and never returned again. Re-inclusion never
+extends any expiry — the token and `expiresAt` are identical
+on every poll.
+
  * @summary Poll for invoice payment, returning a JWT once paid
  */
 export const GetPaymentStatusParams = zod.object({
@@ -130,7 +138,7 @@ export const GetPaymentStatusResponse = zod
       .string()
       .optional()
       .describe(
-        "One-time 4-word BIP-39 recovery code (lowercase, single\nspaces). Present only on the first `paid: true` response\nfor a given payment hash. Show this to the user once and\nnever persist it on the client.\n",
+        "One-time 4-word BIP-39 recovery code (lowercase, single\nspaces). Present on every `paid: true` response until the\nclient acknowledges receipt via `POST \/paywall\/ack-recovery`,\nnever after. Show this to the user and never persist it on\nthe client.\n",
       ),
     expiresAt: zod
       .number()
@@ -140,8 +148,41 @@ export const GetPaymentStatusResponse = zod
       ),
   })
   .describe(
-    "Result of polling for invoice settlement. When `paid` is `true`\nthe response also includes the newly minted JWT, the tier that\nwas paid for, the absolute expiry of the paid window, and a\none-time `recoveryCode` (4 BIP-39 words) that can be used\nonce via `POST \/paywall\/recover` to remint a fresh JWT for the\nsame window. The `recoveryCode` is only present on the \*\*first\*\*\npoll-confirm; subsequent polls of the same hash return the\ntoken without it.\n",
+    "Result of polling for invoice settlement. When `paid` is `true`\nthe response also includes the newly minted JWT, the tier that\nwas paid for, the absolute expiry of the paid window, and a\none-time `recoveryCode` (4 BIP-39 words) that can be used\nonce via `POST \/paywall\/recover` to remint a fresh JWT for the\nsame window. The `recoveryCode` is included on \*\*every\*\*\n`paid: true` response until the client acknowledges receipt\nvia `POST \/paywall\/ack-recovery`; after the ack it is deleted\nserver-side and never returned again.\n",
   );
+
+/**
+ * Confirms that the client has displayed the `recoveryCode`
+returned by `GET /paywall/status/{paymentHash}`. After a
+successful ack the server deletes its delivery copy of the
+code, and subsequent status polls for the same hash never
+include a `recoveryCode` again. The redeemable copy used by
+`POST /paywall/recover` is unaffected — the code remains valid
+for exactly one redemption within the paid window.
+
+The response is `{ ok: true }` unconditionally — for unknown
+hashes, unpaid hashes, malformed hashes, and repeated acks
+alike — so the endpoint cannot be used as an oracle for
+invoice existence or payment state. Acks are idempotent and
+never modify any expiry.
+
+ * @summary Acknowledge receipt of the one-time recovery code
+ */
+export const AckRecoveryCodeBody = zod
+  .object({
+    paymentHash: zod
+      .string()
+      .describe(
+        "The `paymentHash` whose recovery code has been displayed to the user.",
+      ),
+  })
+  .describe("Body for `POST \/paywall\/ack-recovery`.");
+
+export const AckRecoveryCodeResponse = zod
+  .object({
+    ok: zod.boolean().describe("Always `true`."),
+  })
+  .describe("Unconditional acknowledgment result.");
 
 /**
  * Redeems the 4-word BIP-39 recovery code that was returned alongside

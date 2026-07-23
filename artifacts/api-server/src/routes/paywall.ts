@@ -38,11 +38,19 @@ export function isValidTier(value: unknown): value is Tier {
 //   (b) it was paid and its paid-window expiry has elapsed.
 //
 // On the FIRST poll that observes payment we mint the JWT, mint the recovery
-// code, and stamp `settled = { token, expiresAt, recoveryRevealed: true }`
-// onto the same entry. Subsequent polls of the same hash return the EXACT
-// same token + expiresAt and OMIT the recovery code. This is the invariant
-// that prevents a host from extending their paid window — or downgrading
-// tier from day → standard — by re-polling /paywall/status.
+// code, and stamp `settled = { token, expiresAt, recoveryCode,
+// recoveryAcked: false }` onto the same entry. Subsequent polls of the same
+// hash return the EXACT same token + expiresAt — never a fresh mint. This is
+// the invariant that prevents a host from extending their paid window — or
+// downgrading tier from day → standard — by re-polling /paywall/status.
+//
+// Recovery-code delivery is ACK-based (Task #1143): the code is re-included
+// on every status response until the client explicitly acknowledges receipt
+// via POST /paywall/ack-recovery, at which point it is deleted from the
+// settled state and never returned again. This closes the delivery race
+// where the first (and only) reveal was lost to a dropped response, a
+// mid-jitter unmount, or a page refresh. Re-inclusion never extends any
+// expiry, and a replayed ack is an idempotent no-op.
 //
 // A poll that observes payment but has no `invoiceStates` entry (e.g. server
 // restart wiped the in-memory state) loud-WARNs and falls through to a
@@ -59,9 +67,14 @@ interface InvoiceState {
     token: string;
     /** Wall-clock ms when the paid window (and thus the JWT) becomes invalid. */
     expiresAt: number;
-    /** True once we've returned the recovery code to a client. We never reveal
-     *  it twice — re-polls of /paywall/status must not leak a fresh code. */
-    recoveryRevealed: boolean;
+    /** The one-time recovery code, retained ONLY until the client acks
+     *  receipt. Deleted (set undefined) on ack so no later status poll can
+     *  re-obtain it. The redeemable copy lives in `recoveryCodes`; this field
+     *  only controls delivery, never redemption. */
+    recoveryCode?: Secret<string>;
+    /** True once the client has acknowledged seeing the code. After this,
+     *  status responses never include a recovery code for this hash again. */
+    recoveryAcked: boolean;
   };
 }
 
@@ -376,6 +389,7 @@ export function createPaywallRouter(options: CreatePaywallRouterOptions = {}) {
 
   router.post("/paywall/invoice", invoiceHandler);
   router.get("/paywall/status/:paymentHash", (req, res) => statusHandler(req, res, secret));
+  router.post("/paywall/ack-recovery", ackRecoveryHandler);
   router.post("/paywall/recover", (req, res) => recoverHandler(req, res, secret));
   router.get("/paywall/tiers", (_req, res) => {
     // Server-authoritative tier pricing — single source of truth for both
@@ -495,14 +509,19 @@ const statusHandler = async (
 
     // Re-poll path: this hash has already been observed paid in this server
     // lifecycle. Return the SAME token + expiresAt that we issued the first
-    // time; never extend the window, never downgrade the tier, and never
-    // re-reveal the recovery code (it was shown to whoever first saw it).
+    // time; never extend the window, never downgrade the tier. The recovery
+    // code is re-included until the client acks receipt (see the ack-based
+    // delivery comment above `InvoiceState`) — after ack it is gone from the
+    // settled state and can never be re-obtained here.
     if (state?.settled) {
       res.json({
         paid: true,
         token: state.settled.token,
         tier: state.tier,
         expiresAt: state.settled.expiresAt,
+        ...(state.settled.recoveryAcked || state.settled.recoveryCode === undefined
+          ? {}
+          : { recoveryCode: state.settled.recoveryCode }),
       });
       return;
     }
@@ -560,12 +579,12 @@ const statusHandler = async (
     // Stamp the settled state so subsequent polls take the re-poll branch
     // above. If we had no prior state (restart edge case), synthesize one.
     if (state) {
-      state.settled = { token, expiresAt, recoveryRevealed: true };
+      state.settled = { token, expiresAt, recoveryCode, recoveryAcked: false };
     } else {
       invoiceStates.set(paymentHash, {
         tier,
         invoiceExpiresAt: expiresAt, // unused once settled, but keep type happy
-        settled: { token, expiresAt, recoveryRevealed: true },
+        settled: { token, expiresAt, recoveryCode, recoveryAcked: false },
       });
     }
 
@@ -585,6 +604,40 @@ const statusHandler = async (
     logger.error({ err }, "Failed to check payment status");
     res.status(500).json({ error: "Failed to check payment status" });
   }
+};
+
+// Ack-based recovery-code delivery (Task #1143). The client calls this once
+// the host has proceeded past the PAID screen — i.e. the code has been on
+// screen — and from then on /paywall/status never includes the code again.
+//
+// Abuse posture:
+//  • Replayed acks are idempotent no-ops: the first ack deletes the code from
+//    the settled state and flips `recoveryAcked`; later acks find nothing to
+//    delete and change nothing.
+//  • The response is IDENTICAL ({ ok: true }) for unknown hashes, unpaid
+//    hashes, already-acked hashes, and first acks — an attacker probing this
+//    endpoint learns nothing about whether a hash exists or was paid.
+//  • The ack never touches `expiresAt` (neither the settled window nor the
+//    redeemable entry in `recoveryCodes`) — delivery state and expiry are
+//    fully decoupled, so no ack/poll sequence can extend a paid window.
+const ackRecoveryHandler = (
+  req: import("express").Request,
+  res: import("express").Response,
+) => {
+  const paymentHash = typeof req.body?.paymentHash === "string" ? req.body.paymentHash : "";
+  // Same charset discipline as statusHandler: 64-hex (LN payment hash) or the
+  // BTCPay-style opaque id. Anything else is simply treated as unknown — same
+  // { ok: true } response, no oracle.
+  const validShape =
+    /^[0-9a-f]{64}$/i.test(paymentHash) || /^[A-Za-z0-9_-]{10,64}$/.test(paymentHash);
+  if (validShape) {
+    const state = invoiceStates.get(paymentHash);
+    if (state?.settled) {
+      state.settled.recoveryAcked = true;
+      delete state.settled.recoveryCode;
+    }
+  }
+  res.json({ ok: true });
 };
 
 const recoverHandler = (

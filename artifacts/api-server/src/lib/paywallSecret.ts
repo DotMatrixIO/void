@@ -12,14 +12,18 @@
 // enforcement point because it is the one process that signs and verifies
 // these tokens.
 //
-// Note on policy: the "unset" case is intentionally NOT rejected here. When
-// PAYWALL_SECRET is unset, `routes/paywall.ts` generates an ephemeral
-// 32-byte secret per process — documented as the single-instance dev/default
-// behavior (see README-selfhost.md and replit.md). That ephemeral value is
-// strong; the failure mode it has is "JWTs are invalidated on restart",
-// which is a UX problem, not a security weakness. The placeholder problem
-// is categorically different — a guessable HMAC key — and so is enforced
-// independently of the unset-vs-set question.
+// Note on policy: the "unset" case is NOT rejected by the placeholder guard.
+// When PAYWALL_SECRET is unset, `routes/paywall.ts` generates an ephemeral
+// 32-byte secret per process — a strong value whose failure mode is "JWTs
+// and recovery codes are invalidated on restart". That is acceptable for
+// dev/preview, but in production it silently strands every paying host on
+// each container restart (observed on the burndown.video VPS, Task #1143).
+// So production posture is enforced separately by
+// `assertPaywallSecretConfiguredInProduction` below: when NODE_ENV is
+// "production" and PAYWALL_SECRET is unset/blank, the server refuses to
+// start unless the operator explicitly opts into the ephemeral behavior via
+// PAYWALL_ALLOW_EPHEMERAL_SECRET=1 — mirroring the TURN placeholder-refusal
+// pattern (fail closed, loudly, before any port is bound).
 //
 // To add a new placeholder later, add a lowercase string to the array below.
 
@@ -65,6 +69,38 @@ export function isPlaceholderPaywallSecret(rawSecret: string): boolean {
  */
 export function brandPaywallSecret(rawSecret: string): Secret<string> {
   return markSecret(rawSecret);
+}
+
+export class MissingPaywallSecretError extends Error {
+  constructor() {
+    super(
+      "PAYWALL_SECRET is not set and NODE_ENV is production. Set a stable " +
+        "secret (openssl rand -hex 32) or explicitly opt into ephemeral " +
+        "per-process secrets with PAYWALL_ALLOW_EPHEMERAL_SECRET=1.",
+    );
+    this.name = "MissingPaywallSecretError";
+  }
+}
+
+/**
+ * Production-posture guard (Task #1143): refuse to start in production
+ * without a configured PAYWALL_SECRET, unless the operator explicitly sets
+ * PAYWALL_ALLOW_EPHEMERAL_SECRET=1. An unset secret means every restart
+ * invalidates all outstanding host JWTs AND all 4-word recovery codes — a
+ * paying host silently loses their room on any container restart. That is a
+ * legitimate choice for a single-instance dev/demo box, so it stays
+ * available behind the explicit opt-out; it must never be the accidental
+ * default in production.
+ */
+export function assertPaywallSecretConfiguredInProduction(
+  rawSecret: string | undefined,
+  nodeEnv: string | undefined,
+  allowEphemeral: string | undefined,
+): void {
+  if (nodeEnv !== "production") return;
+  if (rawSecret !== undefined && rawSecret.trim() !== "") return;
+  if (allowEphemeral === "1") return;
+  throw new MissingPaywallSecretError();
 }
 
 export function assertPaywallSecretNotPlaceholder(

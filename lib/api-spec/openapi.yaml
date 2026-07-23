@@ -115,6 +115,14 @@ paths:
         but unpaid invoice would receive. This is intentional —
         clients are expected to poll and never need a "not found"
         signal — and means there is no 404 response for this route.
+
+        Recovery-code delivery is acknowledgment-based: every
+        `paid: true` response for a given `paymentHash` includes the
+        one-time `recoveryCode` until the client confirms receipt via
+        `POST /paywall/ack-recovery`, after which the code is deleted
+        server-side and never returned again. Re-inclusion never
+        extends any expiry — the token and `expiresAt` are identical
+        on every poll.
       parameters:
         - name: paymentHash
           in: path
@@ -148,6 +156,38 @@ paths:
             application/json:
               schema:
                 $ref: "#/components/schemas/ErrorResponse"
+  /paywall/ack-recovery:
+    post:
+      operationId: ackRecoveryCode
+      tags: [paywall]
+      summary: Acknowledge receipt of the one-time recovery code
+      description: |
+        Confirms that the client has displayed the `recoveryCode`
+        returned by `GET /paywall/status/{paymentHash}`. After a
+        successful ack the server deletes its delivery copy of the
+        code, and subsequent status polls for the same hash never
+        include a `recoveryCode` again. The redeemable copy used by
+        `POST /paywall/recover` is unaffected — the code remains valid
+        for exactly one redemption within the paid window.
+
+        The response is `{ ok: true }` unconditionally — for unknown
+        hashes, unpaid hashes, malformed hashes, and repeated acks
+        alike — so the endpoint cannot be used as an oracle for
+        invoice existence or payment state. Acks are idempotent and
+        never modify any expiry.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/AckRecoveryRequest"
+      responses:
+        "200":
+          description: Acknowledged (unconditional).
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/AckRecoveryResponse"
   /paywall/recover:
     post:
       operationId: recoverPaidWindow
@@ -371,9 +411,10 @@ components:
         was paid for, the absolute expiry of the paid window, and a
         one-time `recoveryCode` (4 BIP-39 words) that can be used
         once via `POST /paywall/recover` to remint a fresh JWT for the
-        same window. The `recoveryCode` is only present on the **first**
-        poll-confirm; subsequent polls of the same hash return the
-        token without it.
+        same window. The `recoveryCode` is included on **every**
+        `paid: true` response until the client acknowledges receipt
+        via `POST /paywall/ack-recovery`; after the ack it is deleted
+        server-side and never returned again.
       properties:
         paid:
           type: boolean
@@ -390,14 +431,33 @@ components:
           type: string
           description: |
             One-time 4-word BIP-39 recovery code (lowercase, single
-            spaces). Present only on the first `paid: true` response
-            for a given payment hash. Show this to the user once and
-            never persist it on the client.
+            spaces). Present on every `paid: true` response until the
+            client acknowledges receipt via `POST /paywall/ack-recovery`,
+            never after. Show this to the user and never persist it on
+            the client.
         expiresAt:
           type: integer
           description: Absolute expiry of the paid window, Unix milliseconds. Present iff `paid` is `true`.
       required:
         - paid
+    AckRecoveryRequest:
+      type: object
+      description: Body for `POST /paywall/ack-recovery`.
+      properties:
+        paymentHash:
+          type: string
+          description: "The `paymentHash` whose recovery code has been displayed to the user."
+      required:
+        - paymentHash
+    AckRecoveryResponse:
+      type: object
+      description: Unconditional acknowledgment result.
+      properties:
+        ok:
+          type: boolean
+          description: Always `true`.
+      required:
+        - ok
     RecoverRequest:
       type: object
       description: Body for `POST /paywall/recover`.

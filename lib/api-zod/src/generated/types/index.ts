@@ -13,6 +13,8 @@ intentionally out of scope for this spec.
  * OpenAPI spec version: 0.1.0
  */
 
+export * from "./ackRecoveryRequest";
+export * from "./ackRecoveryResponse";
 export * from "./devPaymentResult";
 export * from "./errorResponse";
 export * from "./healthStatus";

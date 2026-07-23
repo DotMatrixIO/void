@@ -17,7 +17,9 @@ import {
 } from "./lib/cloudflareTurn";
 import {
   assertPaywallSecretNotPlaceholder,
+  assertPaywallSecretConfiguredInProduction,
   PlaceholderPaywallSecretError,
+  MissingPaywallSecretError,
 } from "./lib/paywallSecret";
 import {
   isTorOnly,
@@ -75,6 +77,34 @@ try {
         "Generate a new secret with 'openssl rand -hex 32' and set " +
         "PAYWALL_SECRET in your environment, or unset it to use the " +
         "ephemeral per-process default.",
+    );
+    process.exit(1);
+  }
+  throw err;
+}
+
+// Production-posture refusal (Task #1143): an UNSET PAYWALL_SECRET makes
+// `routes/paywall.ts` mint a fresh ephemeral secret each process start,
+// which silently invalidates every outstanding host JWT and every 4-word
+// recovery code on restart — paying hosts lose their rooms with no error.
+// Fine for dev/preview; never an acceptable accidental default in
+// production. Same fail-closed-before-bind shape as the TURN guard, with an
+// explicit opt-out (PAYWALL_ALLOW_EPHEMERAL_SECRET=1) for the legitimate
+// single-instance demo case.
+try {
+  assertPaywallSecretConfiguredInProduction(
+    process.env["PAYWALL_SECRET"],
+    process.env["NODE_ENV"],
+    process.env["PAYWALL_ALLOW_EPHEMERAL_SECRET"],
+  );
+} catch (err) {
+  if (err instanceof MissingPaywallSecretError) {
+    logger.fatal(
+      "FATAL: NODE_ENV is production but PAYWALL_SECRET is not set. " +
+        "Without a stable secret, every restart invalidates all paid-room " +
+        "tokens and recovery codes. Generate one with 'openssl rand -hex 32' " +
+        "and set PAYWALL_SECRET, or set PAYWALL_ALLOW_EPHEMERAL_SECRET=1 to " +
+        "explicitly accept ephemeral per-process secrets.",
     );
     process.exit(1);
   }

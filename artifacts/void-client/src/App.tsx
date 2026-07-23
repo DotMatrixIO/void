@@ -109,6 +109,12 @@ async function emitHostCreate(
     // error code is dedicated, so surface it as plain language instead
     // of pretending the payment didn't happen.
     if (result.error === "TOKEN_ALREADY_USED") {
+      // Task #1143: the stored token is spent — clear it (and the resume
+      // hash, whose status poll would only hand the same spent token back)
+      // so the next HOST ROOM click reopens the paywall instead of
+      // dead-ending through this same rejected emit forever.
+      sessionStorage.removeItem("void_token");
+      sessionStorage.removeItem("void_payment_hash");
       return { error: "ONE PAYMENT, ONE ROOM — PAY AGAIN FOR A NEW ONE" };
     }
     // Task #482: the catch-all used to read "PAYMENT REQUIRED" for every
@@ -121,6 +127,13 @@ async function emitHostCreate(
     if (result.error === "INVALID_REQUEST" || result.error === "INVALID_ROOM_ID") {
       return { error: "BAD REQUEST — RELOAD AND TRY AGAIN" };
     }
+    // Task #1143: any remaining rejection while a token IS present means the
+    // server refused it (expired, or signed under a previous ephemeral
+    // PAYWALL_SECRET before a restart). Clear the stored state so HOST ROOM
+    // recovers to the paywall — leaving it stored made the button dead
+    // forever, surviving refresh, because sessionStorage does.
+    sessionStorage.removeItem("void_token");
+    sessionStorage.removeItem("void_payment_hash");
     return { error: "PAYMENT REQUIRED" };
   }
   return { error: "COLLISION — TRY AGAIN" };
