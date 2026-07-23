@@ -1272,6 +1272,108 @@ describe("PaywallModal status-poll failure banner", () => {
 });
 
 // ---------------------------------------------------------------------------
+// Task #1150: skip-to-paid path — when both void_token and void_payment_hash
+// are already in sessionStorage on mount AND the token has not expired, the
+// modal must open directly onto the paid screen (no spinner, no polling).
+// ---------------------------------------------------------------------------
+describe("PaywallModal resume skip-to-paid (Task #1150)", () => {
+  beforeEach(() => {
+    sessionStorage.clear();
+    vi.useRealTimers();
+  });
+  afterEach(() => {
+    vi.useRealTimers();
+    vi.unstubAllGlobals();
+    sessionStorage.clear();
+  });
+
+  // Build a minimal JWT whose payload carries an `exp` claim offset by
+  // `expOffsetSec` seconds from now.  The signature is a stub — the client
+  // never verifies it; only the `exp` field matters for this check.
+  function makeJwt(expOffsetSec: number): string {
+    const header = btoa(JSON.stringify({ alg: "none" }));
+    const payload = btoa(
+      JSON.stringify({ exp: Math.floor(Date.now() / 1000) + expOffsetSec }),
+    );
+    return `${header}.${payload}.stub`;
+  }
+
+  it("opens directly onto the paid screen when void_token is present and not expired", () => {
+    const token = makeJwt(3600); // expires 1 hour from now
+    sessionStorage.setItem("void_token", token);
+    sessionStorage.setItem("void_payment_hash", "hash-skip");
+
+    render(
+      <PaywallModal
+        onSuccess={() => {}}
+        onClose={() => {}}
+        resumePaymentHash="hash-skip"
+      />,
+    );
+
+    // Must NOT show the "CHECKING YOUR PAYMENT" spinner at all.
+    expect(screen.queryByTestId("resume-checking")).not.toBeInTheDocument();
+    // Must be on the paid phase immediately (header is the tell).
+    expect(screen.getByText("✓ PAID — ROOM READY")).toBeInTheDocument();
+    // The room-entry CTA must be available without any polling.
+    expect(screen.getByRole("button", { name: "OPEN ROOM" })).toBeInTheDocument();
+  });
+
+  it("calls onSuccess with the stored token when OPEN ROOM is clicked on the skip-to-paid screen", () => {
+    const token = makeJwt(3600);
+    sessionStorage.setItem("void_token", token);
+    sessionStorage.setItem("void_payment_hash", "hash-skip");
+
+    const onSuccess = vi.fn();
+    render(
+      <PaywallModal
+        onSuccess={onSuccess}
+        onClose={() => {}}
+        resumePaymentHash="hash-skip"
+      />,
+    );
+
+    fireEvent.click(screen.getByRole("button", { name: "OPEN ROOM" }));
+    expect(onSuccess).toHaveBeenCalledTimes(1);
+    expect(onSuccess).toHaveBeenCalledWith(token);
+  });
+
+  it("falls through to the resume-poll spinner when void_token is expired", () => {
+    const token = makeJwt(-60); // expired 60 seconds ago
+    sessionStorage.setItem("void_token", token);
+    sessionStorage.setItem("void_payment_hash", "hash-skip");
+
+    render(
+      <PaywallModal
+        onSuccess={() => {}}
+        onClose={() => {}}
+        resumePaymentHash="hash-skip"
+      />,
+    );
+
+    // Expired token must NOT skip to paid — fall through to the poll path.
+    expect(screen.getByTestId("resume-checking")).toBeInTheDocument();
+    expect(screen.queryByText("✓ PAID — ROOM READY")).not.toBeInTheDocument();
+  });
+
+  it("falls through to the resume-poll spinner when void_token is absent", () => {
+    // void_payment_hash present but no token at all.
+    sessionStorage.setItem("void_payment_hash", "hash-skip");
+
+    render(
+      <PaywallModal
+        onSuccess={() => {}}
+        onClose={() => {}}
+        resumePaymentHash="hash-skip"
+      />,
+    );
+
+    expect(screen.getByTestId("resume-checking")).toBeInTheDocument();
+    expect(screen.queryByText("✓ PAID — ROOM READY")).not.toBeInTheDocument();
+  });
+});
+
+// ---------------------------------------------------------------------------
 // Task #1143: interrupted-flow resume + ack-based recovery-code delivery +
 // static privacy-delay copy.
 // ---------------------------------------------------------------------------

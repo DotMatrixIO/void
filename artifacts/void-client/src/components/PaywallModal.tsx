@@ -92,6 +92,25 @@ const STATUS_POLL_FAILURE_THRESHOLD = 3;
 // and surface a clear dead-end — no silent infinite spinner.
 const RESUME_UNVERIFIABLE_THRESHOLD = 10;
 
+// Task #1150: decode a JWT and check whether its `exp` claim is in the past.
+// Used on mount to decide whether a stored void_token can skip polling entirely.
+// Treats malformed tokens and tokens with no `exp` claim as non-expired so we
+// don't accidentally re-poll for tokens that legitimately omit an expiry.
+function isJwtExpired(token: string): boolean {
+  try {
+    const parts = token.split(".");
+    if (parts.length < 2) return true;
+    // base64url → standard base64, then restore padding.
+    let b64 = parts[1].replace(/-/g, "+").replace(/_/g, "/");
+    while (b64.length % 4 !== 0) b64 += "=";
+    const decoded = JSON.parse(atob(b64)) as Record<string, unknown>;
+    if (typeof decoded.exp !== "number") return false;
+    return Date.now() / 1000 >= decoded.exp;
+  } catch {
+    return true;
+  }
+}
+
 function formatWallClock(ms: number): string {
   const d = new Date(ms);
   const now = new Date();
@@ -132,7 +151,16 @@ function computeExtendPreview(
 
 export default function PaywallModal({ onSuccess, onClose, headerLabel, successLabel, extendPreview, resumePaymentHash }: Props) {
   const ctaCopy = successLabel ?? "OPEN ROOM";
-  const [phase, setPhase] = useState<Phase>(resumePaymentHash ? "waiting" : "choosing");
+  // Task #1150: if the host refreshes mid-session and both void_token and
+  // void_payment_hash are already in sessionStorage, skip polling entirely and
+  // open directly onto the paid screen. Only fall through to the "waiting"
+  // poll path when the stored token is missing or already expired.
+  const [phase, setPhase] = useState<Phase>(() => {
+    if (!resumePaymentHash) return "choosing";
+    const stored = sessionStorage.getItem("void_token");
+    if (stored && !isJwtExpired(stored)) return "paid";
+    return "waiting";
+  });
   const headerCopy =
     phase === "paid" ? "✓ PAID — ROOM READY" : headerLabel ?? "⚡ HOST A ROOM";
   const [tier, setTier] = useState<Tier>("standard");
@@ -177,7 +205,14 @@ export default function PaywallModal({ onSuccess, onClose, headerLabel, successL
   // Item 10: after ~15s waiting for payment with no wallet having auto-opened,
   // surface an inline "open your wallet manually and paste this invoice" hint.
   const [showWalletHint, setShowWalletHint] = useState(false);
-  const [paidToken, setPaidToken] = useState<string | null>(null);
+  // Task #1150: pre-populate from sessionStorage on the skip-to-paid path so
+  // proceedFromPaid has a token to hand to onSuccess without a prior poll.
+  const [paidToken, setPaidToken] = useState<string | null>(() => {
+    if (!resumePaymentHash) return null;
+    const stored = sessionStorage.getItem("void_token");
+    if (stored && !isJwtExpired(stored)) return stored;
+    return null;
+  });
   // Consecutive failed status polls (network error or non-503 non-OK
   // response). Reset to 0 by any readable status response. Once it crosses
   // STATUS_POLL_FAILURE_THRESHOLD the waiting screen shows a non-blocking
