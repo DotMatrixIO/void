@@ -773,6 +773,12 @@ export const __testing = {
   invoiceStates,
   gcRecoveryCodes,
   gcInvoiceStates,
+  /** Wipe invoiceStates entirely. Used with lightning.__testing.pending.clear()
+   *  to simulate a server restart in tests — both maps must be cleared
+   *  together to faithfully model the restart-loss scenario. */
+  clearInvoiceStates() {
+    invoiceStates.clear();
+  },
   resetRecoverRateLimit,
   resetLightning503Alert,
   LIGHTNING_503_ALERT_THRESHOLD,

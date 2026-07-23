@@ -421,13 +421,19 @@ function buildLNbitsAdapter(): LightningAdapter {
 
     async checkPayment(paymentHash: string): Promise<boolean> {
       const entry = pending.get(paymentHash);
-      if (!entry) return false;
-      if (Date.now() - entry.createdAt > INVOICE_TTL_MS) {
-        pending.delete(paymentHash);
-        return false;
+      if (entry) {
+        if (Date.now() - entry.createdAt > INVOICE_TTL_MS) {
+          pending.delete(paymentHash);
+          return false;
+        }
+        // Fast path: already confirmed paid in this server lifecycle.
+        if (entry.paid) return true;
+        // Entry exists but not yet marked paid — fall through to backend.
       }
-      if (entry.paid) return true;
-
+      // Slow path: either no entry (server restarted and wiped the pending
+      // map, but the Lightning node still has the invoice) or entry exists
+      // but isn't yet settled locally. Query LNbits directly so a host who
+      // paid before a restart is not stranded on an endless CHECKING screen.
       // Defense in depth (CodeQL #12): the hostname is config-derived
       // (LNBITS_URL env), so the path segment is the only user-influenced
       // component of the outgoing URL. The route boundary already enforces
@@ -441,7 +447,11 @@ function buildLNbitsAdapter(): LightningAdapter {
 
       const data = parseOrThrow("lnbits", lnbitsStatusSchema, await res.json());
       if (data.paid === true) {
-        entry.paid = true;
+        // Cache the confirmed state if we still have an entry (normal path).
+        // If entry is absent (restart-loss), we intentionally do NOT create
+        // a synthetic entry — we don't have invoice/amountSats metadata and
+        // creating a partial record could confuse the GC sweep.
+        if (entry) entry.paid = true;
         return true;
       }
       return false;
@@ -518,13 +528,19 @@ function buildBTCPayAdapter(): LightningAdapter {
 
     async checkPayment(paymentHash: string): Promise<boolean> {
       const entry = pending.get(paymentHash);
-      if (!entry) return false;
-      if (Date.now() - entry.createdAt > INVOICE_TTL_MS) {
-        pending.delete(paymentHash);
-        return false;
+      if (entry) {
+        if (Date.now() - entry.createdAt > INVOICE_TTL_MS) {
+          pending.delete(paymentHash);
+          return false;
+        }
+        // Fast path: already confirmed paid in this server lifecycle.
+        if (entry.paid) return true;
+        // Entry exists but not yet marked paid — fall through to backend.
       }
-      if (entry.paid) return true;
-
+      // Slow path: either no entry (server restarted and wiped the pending
+      // map, but the BTCPay store still has the invoice) or entry exists
+      // but isn't yet settled locally. Query BTCPay directly so a host who
+      // paid before a restart is not stranded on an endless CHECKING screen.
       const res = await lightningFetch(
         // Defense in depth (CodeQL #12): hostname/store are config-derived
         // (BTCPAY_URL / BTCPAY_STORE_ID env), so the ID is the only
@@ -540,7 +556,11 @@ function buildBTCPayAdapter(): LightningAdapter {
 
       const data = parseOrThrow("btcpay", btcpayStatusSchema, await res.json());
       if (data.status === "Settled" || data.status === "Processing") {
-        entry.paid = true;
+        // Cache the confirmed state if we still have an entry (normal path).
+        // If entry is absent (restart-loss), we intentionally do NOT create
+        // a synthetic entry — we don't have invoice/amountSats metadata and
+        // creating a partial record could confuse the GC sweep.
+        if (entry) entry.paid = true;
         return true;
       }
       return false;
@@ -579,13 +599,38 @@ function resolveAdapter(): LightningAdapter {
 
 const adapter = resolveAdapter();
 
+// Test-only override for checkPayment. Null in production; replaced by test
+// suites that need to simulate backend behaviour (lnbits/btcpay restart-loss)
+// without a real Lightning node. Always null-checked first so production paths
+// are unaffected. Never set this in production code.
+let _checkPaymentOverride: ((hash: string) => Promise<boolean>) | null = null;
+
 export async function createInvoice(amountSats: number): Promise<Invoice> {
   return adapter.createInvoice(amountSats);
 }
 
 export async function checkPayment(paymentHash: string): Promise<boolean> {
+  if (_checkPaymentOverride !== null) return _checkPaymentOverride(paymentHash);
   return adapter.checkPayment(paymentHash);
 }
+
+// Test-only escape hatches.
+export const __testing = {
+  /** Direct access to the in-memory pending-invoice map. Tests use this to
+   *  simulate a server restart (wipe both this map and invoiceStates from
+   *  paywall.ts) without actually restarting the process. */
+  pending,
+  /** Override checkPayment for a test. Lets tests simulate real-backend
+   *  restart-loss behaviour (lnbits/btcpay confirming a hash is paid even
+   *  though the pending map no longer contains it) without running an
+   *  actual Lightning node. Must be followed by resetCheckPaymentOverride(). */
+  overrideCheckPayment(fn: (hash: string) => Promise<boolean>): void {
+    _checkPaymentOverride = fn;
+  },
+  resetCheckPaymentOverride(): void {
+    _checkPaymentOverride = null;
+  },
+};
 
 /** Mark a pending invoice as paid (dev/mock backend only).
  *

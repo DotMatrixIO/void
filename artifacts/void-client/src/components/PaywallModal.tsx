@@ -82,6 +82,16 @@ const RETRY_COOLDOWN_MS = 5000;
 // (paid or not) clears it.
 const STATUS_POLL_FAILURE_THRESHOLD = 3;
 
+// Task #1144: resume-flow unverifiable threshold. In a resume flow (the modal
+// opened with resumePaymentHash because the client stored a payment hash from
+// a previous session), the client polls /paywall/status. If it gets consecutive
+// {paid:false} responses without ever seeing {paid:true}, the server has lost
+// the invoice state (restart wiped the in-memory maps) AND the backend cannot
+// re-verify (e.g. mock backend, or the invoice TTL has passed). After this
+// many consecutive {paid:false} responses in a resume flow, we stop polling
+// and surface a clear dead-end — no silent infinite spinner.
+const RESUME_UNVERIFIABLE_THRESHOLD = 10;
+
 function formatWallClock(ms: number): string {
   const d = new Date(ms);
   const now = new Date();
@@ -176,12 +186,26 @@ export default function PaywallModal({ onSuccess, onClose, headerLabel, successL
   // True while a manual CHECK NOW poll is in flight, so the button can show a
   // "CHECKING…" state and reject double-clicks.
   const [manualChecking, setManualChecking] = useState(false);
+  // Task #1144: resume-flow unverifiable state. Set true when the client is in
+  // a resume flow (resumePaymentHash was set) and has polled
+  // RESUME_UNVERIFIABLE_THRESHOLD times without ever seeing {paid:true}. This
+  // means the server has lost the invoice state (restart-wiped) and can no
+  // longer verify the payment — we surface a clear dead-end instead of an
+  // endless CHECKING YOUR PAYMENT screen.
+  const [paymentUnverifiable, setPaymentUnverifiable] = useState(false);
   // Item 19: ref to the rendered recovery-code span so we can select-all on
   // reveal (and on tap) for hosts whose clipboard write rejected silently.
   const recoveryCodeRef = useRef<HTMLSpanElement | null>(null);
   const recoveryCopiedTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const pollRef = useRef<ReturnType<typeof setInterval> | null>(null);
   const mountedRef = useRef(true);
+  // Whether this modal instance is a resume flow (set once at mount, never
+  // changes). Used by pollStatus to apply the unverifiable-threshold logic
+  // only when the client is re-checking a hash from a previous session.
+  const isResumeFlowRef = useRef(!!resumePaymentHash);
+  // Running count of consecutive {paid:false} responses in a resume flow.
+  // A ref (not state) to avoid triggering re-renders on every poll tick.
+  const resumePollCountRef = useRef(0);
   // Drives a per-second re-render of the extend preview so the projected
   // wall-clock time and "no headroom" check stay accurate as time passes
   // while the host is staring at the modal.
@@ -355,6 +379,22 @@ export default function PaywallModal({ onSuccess, onClose, headerLabel, successL
         // window without re-paying. Hold the modal open until they
         // dismiss the code themselves — no auto-advance, by design.
         setRecoveryCode(typeof data.recoveryCode === "string" ? data.recoveryCode : null);
+      } else if (isResumeFlowRef.current) {
+        // Task #1144: resume flow + {paid:false}. The server cannot confirm
+        // the invoice. This is expected when the server restarted and the
+        // mock backend lost the invoice state (real backends re-verify and
+        // would have returned paid:true instead). Track consecutive
+        // non-confirmation responses — after RESUME_UNVERIFIABLE_THRESHOLD
+        // we stop polling and surface a clear dead-end so the host knows to
+        // use their recovery code or contact the operator, rather than
+        // staring at an endless CHECKING YOUR PAYMENT screen.
+        const newCount = resumePollCountRef.current + 1;
+        resumePollCountRef.current = newCount;
+        if (newCount >= RESUME_UNVERIFIABLE_THRESHOLD) {
+          stopPolling();
+          setPaymentUnverifiable(true);
+          setPhase("error");
+        }
       }
     } catch {
       // Network error / endpoint unreachable. Previously swallowed silently,
@@ -434,6 +474,10 @@ export default function PaywallModal({ onSuccess, onClose, headerLabel, successL
     setRetryReadyAtMs(0);
     setRetryMode("invoice");
     setPollFailures(0);
+    // Task #1144: reset the unverifiable dead-end state so navigating back
+    // from the error screen starts a clean flow.
+    setPaymentUnverifiable(false);
+    resumePollCountRef.current = 0;
     setPhase("choosing");
   }
 
@@ -765,62 +809,110 @@ export default function PaywallModal({ onSuccess, onClose, headerLabel, successL
 
           {phase === "error" && (
             <>
-              <div style={{ fontSize: "13px", color: "var(--red)", letterSpacing: "2px", textAlign: "center", padding: "20px 0" }}>
-                {errorMsg}
-              </div>
-              {errorRetryable && (
-                <button
-                  data-testid="paywall-retry"
-                  onClick={() => {
-                    if (retryDisabled) return;
-                    if (retryMode === "resume-poll") {
-                      // The invoice already exists and may have settled during
-                      // the outage. Clear the error state and drop back to the
-                      // waiting screen — the poll effect re-installs itself
-                      // because invoice + paymentHash are still in state.
-                      setErrorRetryable(false);
-                      setRetryReadyAtMs(0);
-                      setErrorMsg("");
-                      setPhase("waiting");
-                      return;
-                    }
-                    requestInvoice(tier);
-                  }}
-                  disabled={retryDisabled}
-                  aria-disabled={retryDisabled}
-                  style={{
-                    background: retryDisabled ? "var(--surface)" : "var(--gold)",
-                    color: retryDisabled ? "var(--fg-dim)" : "var(--surface-dark)",
-                    border: `3px solid ${retryDisabled ? "var(--fg-dim)" : "var(--gold)"}`,
-                    fontFamily: "var(--font-mono)",
-                    fontSize: "16px",
-                    padding: "10px 16px",
-                    cursor: retryDisabled ? "not-allowed" : "pointer",
-                    letterSpacing: "3px",
-                    fontWeight: 700,
-                    width: "100%",
-                  }}
-                >
-                  {retryDisabled
-                    ? `TRY AGAIN IN ${Math.ceil(cooldownRemainingMs / 1000)}S`
-                    : "TRY AGAIN"}
-                </button>
+              {paymentUnverifiable ? (
+                // Task #1144: resume flow dead-end. The server restarted and
+                // can no longer find or verify this invoice. No TRY AGAIN —
+                // this is not a transient failure. Direct the host to their
+                // recovery code (if they have it) or to the operator.
+                <>
+                  <div
+                    data-testid="payment-unverifiable-heading"
+                    style={{ fontSize: "13px", color: "var(--red)", letterSpacing: "2px", textAlign: "center", padding: "20px 0 8px" }}
+                  >
+                    PAYMENT COULD NOT BE VERIFIED
+                  </div>
+                  <div
+                    data-testid="payment-unverifiable-detail"
+                    style={{
+                      fontSize: "11px",
+                      letterSpacing: "1px",
+                      color: "var(--fg-dim)",
+                      lineHeight: 1.6,
+                      textAlign: "center",
+                      paddingBottom: "16px",
+                    }}
+                  >
+                    The server may have restarted and can no longer find your
+                    invoice. If you saved your recovery code, use it to restore
+                    access. Otherwise contact the operator — your payment is
+                    still on the Lightning node.
+                  </div>
+                  <button
+                    onClick={handleChangeTier}
+                    style={{
+                      background: "none",
+                      border: "3px solid var(--fg-dim)",
+                      color: "var(--fg-dim)",
+                      fontFamily: "var(--font-mono)",
+                      fontSize: "16px",
+                      padding: "8px 14px",
+                      cursor: "pointer",
+                      letterSpacing: "2px",
+                    }}
+                  >
+                    BACK
+                  </button>
+                </>
+              ) : (
+                <>
+                  <div style={{ fontSize: "13px", color: "var(--red)", letterSpacing: "2px", textAlign: "center", padding: "20px 0" }}>
+                    {errorMsg}
+                  </div>
+                  {errorRetryable && (
+                    <button
+                      data-testid="paywall-retry"
+                      onClick={() => {
+                        if (retryDisabled) return;
+                        if (retryMode === "resume-poll") {
+                          // The invoice already exists and may have settled during
+                          // the outage. Clear the error state and drop back to the
+                          // waiting screen — the poll effect re-installs itself
+                          // because invoice + paymentHash are still in state.
+                          setErrorRetryable(false);
+                          setRetryReadyAtMs(0);
+                          setErrorMsg("");
+                          setPhase("waiting");
+                          return;
+                        }
+                        requestInvoice(tier);
+                      }}
+                      disabled={retryDisabled}
+                      aria-disabled={retryDisabled}
+                      style={{
+                        background: retryDisabled ? "var(--surface)" : "var(--gold)",
+                        color: retryDisabled ? "var(--fg-dim)" : "var(--surface-dark)",
+                        border: `3px solid ${retryDisabled ? "var(--fg-dim)" : "var(--gold)"}`,
+                        fontFamily: "var(--font-mono)",
+                        fontSize: "16px",
+                        padding: "10px 16px",
+                        cursor: retryDisabled ? "not-allowed" : "pointer",
+                        letterSpacing: "3px",
+                        fontWeight: 700,
+                        width: "100%",
+                      }}
+                    >
+                      {retryDisabled
+                        ? `TRY AGAIN IN ${Math.ceil(cooldownRemainingMs / 1000)}S`
+                        : "TRY AGAIN"}
+                    </button>
+                  )}
+                  <button
+                    onClick={handleChangeTier}
+                    style={{
+                      background: "none",
+                      border: "3px solid var(--fg-dim)",
+                      color: "var(--fg-dim)",
+                      fontFamily: "var(--font-mono)",
+                      fontSize: "16px",
+                      padding: "8px 14px",
+                      cursor: "pointer",
+                      letterSpacing: "2px",
+                    }}
+                  >
+                    BACK
+                  </button>
+                </>
               )}
-              <button
-                onClick={handleChangeTier}
-                style={{
-                  background: "none",
-                  border: "3px solid var(--fg-dim)",
-                  color: "var(--fg-dim)",
-                  fontFamily: "var(--font-mono)",
-                  fontSize: "16px",
-                  padding: "8px 14px",
-                  cursor: "pointer",
-                  letterSpacing: "2px",
-                }}
-              >
-                BACK
-              </button>
             </>
           )}
 

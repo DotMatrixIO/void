@@ -1,10 +1,10 @@
 // SPDX-License-Identifier: AGPL-3.0-or-later
-import { describe, it, expect, beforeAll, afterAll, beforeEach, vi } from "vitest";
+import { describe, it, expect, beforeAll, afterAll, beforeEach, afterEach, vi } from "vitest";
 import { createServer, type Server as HttpServer } from "node:http";
 import express from "express";
 import jwt from "jsonwebtoken";
 import paywallRouter, { PAYWALL_SECRET, __testing } from "../routes/paywall";
-import { simulatePayment } from "../services/lightning";
+import { simulatePayment, __testing as lightningTesting } from "../services/lightning";
 import { logger } from "../lib/logger";
 
 interface InvoiceOk {
@@ -1096,5 +1096,166 @@ describe("recover endpoint rate limiting", () => {
     } finally {
       warnSpy.mockRestore();
     }
+  });
+});
+
+// ── Restart-loss recovery (Task #1144) ──────────────────────────────────────
+//
+// The server's invoiceStates map and the lightning service's pending map are
+// both in-memory. A restart between invoice creation and settlement wipes them
+// both. Tests below cover the three scenarios:
+//
+//   1. Full restart + mock backend: no re-verification possible →
+//      status returns { paid: false }. The client (PaywallModal) will
+//      surface a dead-end message after RESUME_UNVERIFIABLE_THRESHOLD polls.
+//
+//   2. Real backend restart-loss (simulated via overrideCheckPayment): the
+//      backend still confirms the invoice is paid → route mints a standard-
+//      tier JWT (tier defaults to "standard" since invoiceStates had no entry;
+//      this is logged as a WARN).
+//
+//   3. Partial restart (invoiceStates wiped, pending intact): the mock adapter
+//      still returns paid=true → route mints a JWT (same standard-tier default
+//      path as scenario 2).
+describe("restart-loss recovery", () => {
+  let httpServer: HttpServer;
+  let baseUrl: string;
+
+  beforeAll(async () => {
+    __testing.overrideJitter(0);
+    const app = express();
+    app.set("trust proxy", 1);
+    app.use(express.json());
+    app.use("/api", paywallRouter);
+    httpServer = createServer(app);
+    await new Promise<void>((resolve) => {
+      httpServer.listen(0, () => resolve());
+    });
+    const addr = httpServer.address();
+    const port = typeof addr === "object" && addr ? addr.port : 0;
+    baseUrl = `http://127.0.0.1:${port}`;
+  });
+
+  afterAll(async () => {
+    __testing.clearJitterOverride();
+    lightningTesting.resetCheckPaymentOverride();
+    await new Promise<void>((r) => httpServer.close(() => r()));
+  });
+
+  afterEach(() => {
+    // Always reset the override so it never leaks into a sibling test.
+    lightningTesting.resetCheckPaymentOverride();
+  });
+
+  it("mock backend full restart: both maps wiped → status returns {paid:false} (no silent spin, no crash)", async () => {
+    const inv = await postJson(`${baseUrl}/api/paywall/invoice`, { tier: "standard" });
+    expect(inv.status).toBe(200);
+    const { paymentHash } = inv.body as InvoiceOk;
+    expect(simulatePayment(paymentHash)).toBe(true);
+
+    // Simulate server restart: wipe both in-memory state maps.
+    lightningTesting.pending.clear();
+    __testing.clearInvoiceStates();
+
+    // Mock backend cannot re-verify — returns paid:false. No crash, no 500.
+    const status = await getJson(`${baseUrl}/api/paywall/status/${paymentHash}`);
+    expect(status.status).toBe(200);
+    const body = status.body as { paid: boolean; token?: unknown };
+    expect(body.paid).toBe(false);
+    // Must NOT mint a token for an unverifiable hash.
+    expect(body.token).toBeUndefined();
+  });
+
+  it("real backend restart-loss: re-verification mints a valid standard-tier JWT and recovery code", async () => {
+    const inv = await postJson(`${baseUrl}/api/paywall/invoice`, { tier: "day" });
+    expect(inv.status).toBe(200);
+    const { paymentHash } = inv.body as InvoiceOk;
+
+    // Simulate server restart.
+    lightningTesting.pending.clear();
+    __testing.clearInvoiceStates();
+
+    // Simulate lnbits/btcpay: backend still knows this invoice is paid even
+    // though the in-memory pending map was wiped by the restart.
+    lightningTesting.overrideCheckPayment(async (h) => h === paymentHash);
+
+    const status = await getJson(`${baseUrl}/api/paywall/status/${paymentHash}`);
+    expect(status.status).toBe(200);
+    const ok = status.body as StatusOk;
+    expect(ok.paid).toBe(true);
+    expect(typeof ok.token).toBe("string");
+    // With no invoiceStates entry the tier defaults to "standard" (logged as
+    // WARN). This is acceptable — the host has a working JWT and is not
+    // stranded on an endless polling screen.
+    expect(ok.tier).toBe("standard");
+    // A recovery code is minted so the host can still resume if needed.
+    expect(ok.recoveryCode).toMatch(/^[a-z]+ [a-z]+ [a-z]+ [a-z]+$/);
+    // expiresAt must be a reasonable future timestamp (within 1h + 5s slack).
+    const remainingMs = ok.expiresAt - Date.now();
+    expect(remainingMs).toBeGreaterThan(60 * 60 * 1000 - 5000);
+    expect(remainingMs).toBeLessThanOrEqual(60 * 60 * 1000);
+  });
+
+  it("real backend restart-loss: second status poll returns SAME token (re-poll idempotency preserved)", async () => {
+    const inv = await postJson(`${baseUrl}/api/paywall/invoice`, { tier: "standard" });
+    const { paymentHash } = inv.body as InvoiceOk;
+
+    lightningTesting.pending.clear();
+    __testing.clearInvoiceStates();
+    lightningTesting.overrideCheckPayment(async (h) => h === paymentHash);
+
+    const first = await getJson(`${baseUrl}/api/paywall/status/${paymentHash}`);
+    expect((first.body as StatusOk).paid).toBe(true);
+    const firstOk = first.body as StatusOk;
+
+    // Second poll: the first poll stamped invoiceStates, so the re-poll branch
+    // kicks in — same token, same expiresAt, never a fresh mint.
+    const second = await getJson(`${baseUrl}/api/paywall/status/${paymentHash}`);
+    expect((second.body as StatusOk).token).toBe(firstOk.token);
+    expect((second.body as StatusOk).expiresAt).toBe(firstOk.expiresAt);
+  });
+
+  it("partial restart (invoiceStates only): mock backend still has pending entry, JWT minted with standard-tier default", async () => {
+    const inv = await postJson(`${baseUrl}/api/paywall/invoice`, { tier: "day" });
+    expect(inv.status).toBe(200);
+    const { paymentHash } = inv.body as InvoiceOk;
+    expect(simulatePayment(paymentHash)).toBe(true);
+
+    // Only wipe invoiceStates — pending survives (partial restart).
+    __testing.clearInvoiceStates();
+
+    // Mock adapter still has the paid entry in pending — checkPayment returns true.
+    const status = await getJson(`${baseUrl}/api/paywall/status/${paymentHash}`);
+    expect(status.status).toBe(200);
+    const ok = status.body as StatusOk;
+    expect(ok.paid).toBe(true);
+    expect(typeof ok.token).toBe("string");
+    // Tier defaults to "standard" (no invoiceStates entry to recall "day").
+    expect(ok.tier).toBe("standard");
+    expect(ok.recoveryCode).toMatch(/^[a-z]+ [a-z]+ [a-z]+ [a-z]+$/);
+  });
+
+  it("real backend restart-loss: recovery code redeems successfully after re-verification", async () => {
+    const inv = await postJson(`${baseUrl}/api/paywall/invoice`, { tier: "standard" });
+    const { paymentHash } = inv.body as InvoiceOk;
+
+    lightningTesting.pending.clear();
+    __testing.clearInvoiceStates();
+    lightningTesting.overrideCheckPayment(async (h) => h === paymentHash);
+
+    // Re-verification mints token + recovery code.
+    const status = await getJson(`${baseUrl}/api/paywall/status/${paymentHash}`);
+    const issued = status.body as StatusOk;
+    expect(issued.paid).toBe(true);
+    expect(issued.recoveryCode).toMatch(/^[a-z]+ [a-z]+ [a-z]+ [a-z]+$/);
+
+    // The minted recovery code must be redeemable (proving the full recovery
+    // chain works end-to-end even after a restart-loss mint).
+    const redeem = await postJson(`${baseUrl}/api/paywall/recover`, { code: issued.recoveryCode });
+    expect(redeem.status).toBe(200);
+    const redeemOk = redeem.body as { token: string; tier: string; expiresAt: number };
+    expect(typeof redeemOk.token).toBe("string");
+    expect(redeemOk.tier).toBe("standard");
+    expect(redeemOk.expiresAt).toBe(issued.expiresAt);
   });
 });
