@@ -48,6 +48,10 @@ Thumbs.db
 .cache/
 .local/
 
+# Agent infrastructure (memory, task history, skill cache) — internal to the
+# Replit workspace; must not appear in the public repo.
+.agents/
+
 # attached_assets is the agent/scratch staging area (pasted notes, brainstorming
 # docs, internal drafts). NOTHING here is imported by any source — the @assets
 # Vite alias had no live importer and has been removed — so the whole tree is
