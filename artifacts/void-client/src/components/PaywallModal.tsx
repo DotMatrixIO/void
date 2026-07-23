@@ -228,6 +228,12 @@ export default function PaywallModal({ onSuccess, onClose, headerLabel, successL
   // longer verify the payment — we surface a clear dead-end instead of an
   // endless CHECKING YOUR PAYMENT screen.
   const [paymentUnverifiable, setPaymentUnverifiable] = useState(false);
+  // Task #1148: second-level recovery path for the paymentUnverifiable dead-end.
+  // The host can paste their 4-word recovery code here and click REDEEM to hit
+  // /api/paywall/recover and get a fresh JWT without re-paying.
+  const [recoverInput, setRecoverInput] = useState("");
+  const [recoverError, setRecoverError] = useState("");
+  const [recoverInFlight, setRecoverInFlight] = useState(false);
   // Item 19: ref to the rendered recovery-code span so we can select-all on
   // reveal (and on tap) for hosts whose clipboard write rejected silently.
   const recoveryCodeRef = useRef<HTMLSpanElement | null>(null);
@@ -439,6 +445,53 @@ export default function PaywallModal({ onSuccess, onClose, headerLabel, successL
       setPollFailures((n) => n + 1);
     }
   }, [paymentHash, stopPolling]);
+
+  // Task #1148: second-level recovery — host pastes their 4-word code into the
+  // paymentUnverifiable dead-end screen and clicks REDEEM. Hits
+  // /api/paywall/recover and, on success, advances to the "paid" phase with
+  // the fresh JWT. A failed redeem (invalid/expired/rate-limited code) shows
+  // an inline error and leaves the form intact so the host can retry.
+  const handleRecoverRedeem = useCallback(async () => {
+    if (recoverInFlight) return;
+    setRecoverError("");
+    setRecoverInFlight(true);
+    try {
+      const res = await fetch(apiUrl("/api/paywall/recover"), {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ code: recoverInput }),
+      });
+      if (!mountedRef.current) return;
+      if (res.status === 429) {
+        setRecoverError("TOO MANY ATTEMPTS. WAIT A MOMENT AND TRY AGAIN.");
+        return;
+      }
+      if (res.status === 400) {
+        setRecoverError("INVALID FORMAT — ENTER YOUR 4-WORD CODE EXACTLY AS GIVEN.");
+        return;
+      }
+      if (!res.ok) {
+        // 404 = unknown/already-used/expired; 500 = transient JWT signing failure (retryable).
+        setRecoverError("INVALID OR EXPIRED CODE.");
+        return;
+      }
+      const data = await res.json();
+      if (!mountedRef.current) return;
+      const token: string = data.token;
+      sessionStorage.setItem("void_token", data.token);
+      // Recovery is single-shot — the endpoint never issues a second recovery
+      // code, so we leave recoveryCode null and let the host proceed without
+      // the disclosure. The paid window was already purchased; no new code needed.
+      setPaidToken(token);
+      setPaymentUnverifiable(false);
+      setPhase("paid");
+    } catch {
+      if (!mountedRef.current) return;
+      setRecoverError("NETWORK ERROR. CHECK YOUR CONNECTION AND TRY AGAIN.");
+    } finally {
+      if (mountedRef.current) setRecoverInFlight(false);
+    }
+  }, [recoverInput, recoverInFlight]);
 
   // Manual "CHECK NOW" handler from the failure banner — fires an immediate
   // poll outside the 3s cadence without touching the invoice or QR.
@@ -847,8 +900,8 @@ export default function PaywallModal({ onSuccess, onClose, headerLabel, successL
               {paymentUnverifiable ? (
                 // Task #1144: resume flow dead-end. The server restarted and
                 // can no longer find or verify this invoice. No TRY AGAIN —
-                // this is not a transient failure. Direct the host to their
-                // recovery code (if they have it) or to the operator.
+                // this is not a transient failure. Task #1148: add a recovery
+                // code input so the host can redeem their code without re-paying.
                 <>
                   <div
                     data-testid="payment-unverifiable-heading"
@@ -864,13 +917,81 @@ export default function PaywallModal({ onSuccess, onClose, headerLabel, successL
                       color: "var(--fg-dim)",
                       lineHeight: 1.6,
                       textAlign: "center",
-                      paddingBottom: "16px",
+                      paddingBottom: "8px",
                     }}
                   >
                     The server may have restarted and can no longer find your
-                    invoice. If you saved your recovery code, use it to restore
-                    access. Otherwise contact the operator — your payment is
-                    still on the Lightning node.
+                    invoice. If you saved your recovery code, paste it below to
+                    restore access. Otherwise contact the operator — your
+                    payment is still on the Lightning node.
+                  </div>
+                  {/* Task #1148: recovery-code input — lets the host bypass
+                      the Lightning check entirely using their 4-word code. */}
+                  <div style={{ width: "100%", display: "flex", flexDirection: "column", gap: "8px" }}>
+                    <label
+                      htmlFor="paywall-recover-input"
+                      style={{ fontSize: "11px", letterSpacing: "2px", color: "var(--fg-dim)" }}
+                    >
+                      RECOVERY CODE
+                    </label>
+                    <input
+                      id="paywall-recover-input"
+                      data-testid="paywall-recover-input"
+                      type="text"
+                      value={recoverInput}
+                      onChange={(e) => {
+                        setRecoverInput(e.target.value);
+                        setRecoverError("");
+                      }}
+                      onKeyDown={(e) => {
+                        if (e.key === "Enter" && !recoverInFlight) handleRecoverRedeem();
+                      }}
+                      placeholder="word word word word"
+                      autoComplete="off"
+                      spellCheck={false}
+                      disabled={recoverInFlight}
+                      style={{
+                        background: "var(--surface)",
+                        border: `2px solid ${recoverError ? "var(--red)" : "var(--fg-dim)"}`,
+                        color: "var(--fg)",
+                        fontFamily: "var(--font-mono)",
+                        fontSize: "13px",
+                        letterSpacing: "1px",
+                        padding: "10px 12px",
+                        width: "100%",
+                        boxSizing: "border-box",
+                        outline: "none",
+                      }}
+                    />
+                    {recoverError && (
+                      <div
+                        role="alert"
+                        data-testid="paywall-recover-error"
+                        style={{ fontSize: "11px", letterSpacing: "1px", color: "var(--red)" /* contrast-exception: renders on modal's --bg (3.41:1, exempted accent); scanner sees --surface from sibling input */, lineHeight: 1.5 }}
+                      >
+                        {recoverError}
+                      </div>
+                    )}
+                    <button
+                      data-testid="paywall-recover-redeem"
+                      onClick={handleRecoverRedeem}
+                      disabled={recoverInFlight || recoverInput.trim() === ""}
+                      aria-disabled={recoverInFlight || recoverInput.trim() === ""}
+                      style={{
+                        background: recoverInFlight || recoverInput.trim() === "" ? "var(--surface)" : "var(--gold)",
+                        color: recoverInFlight || recoverInput.trim() === "" ? "var(--fg-dim)" : "var(--surface-dark)",
+                        border: `3px solid ${recoverInFlight || recoverInput.trim() === "" ? "var(--fg-dim)" : "var(--gold)"}`,
+                        fontFamily: "var(--font-mono)",
+                        fontSize: "16px",
+                        padding: "10px 16px",
+                        cursor: recoverInFlight || recoverInput.trim() === "" ? "not-allowed" : "pointer",
+                        letterSpacing: "3px",
+                        fontWeight: 700,
+                        width: "100%",
+                      }}
+                    >
+                      {recoverInFlight ? "REDEEMING…" : "REDEEM"}
+                    </button>
                   </div>
                   <button
                     onClick={handleChangeTier}
