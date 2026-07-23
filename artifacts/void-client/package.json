@@ -39,6 +39,7 @@
     "check:launch-links": "node scripts/check-launch-checklist-links.mjs",
     "test:playwright": "PLAYWRIGHT_SKIP_VALIDATE_HOST_REQUIREMENTS=1 PORT=${PORT:-5173} BASE_PATH=${BASE_PATH:-/} playwright test --config playwright.config.ts",
     "test:playwright:devicecloud": "PLAYWRIGHT_SKIP_VALIDATE_HOST_REQUIREMENTS=1 playwright test --config playwright.devicecloud.config.ts",
+    "test:playwright:resume": "PLAYWRIGHT_SKIP_VALIDATE_HOST_REQUIREMENTS=1 PORT=${PORT:-5173} BASE_PATH=${BASE_PATH:-/} playwright test --config playwright.resume.config.ts",
     "gen:og": "node scripts/gen-og-images.mjs",
     "gen:demo-posters": "node scripts/gen-demo-posters.mjs"
   },

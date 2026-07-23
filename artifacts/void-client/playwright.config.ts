@@ -110,6 +110,15 @@ const MEDIA_SPEC = /media-page-content\.spec\.ts/;
 // kept off the layout / flow / a11y / share-warnings / media gates.
 const PAYMENT_FAILURE_SPEC = /payment-failure-banner\.spec\.ts/;
 
+// The paywall-resume-flow gate drives the full pay → reload → HOST A ROOM →
+// resume → OPEN ROOM round trip against intercepted /api/paywall/* endpoints.
+// It closes the integration gap left by the jsdom unit tests: a real
+// page.reload() + sessionStorage survival, real BASE_URL-prefixed fetch(), and
+// the full StartScreen → PaywallModal resumePaymentHash prop chain are all
+// exercised in a genuine browser. Engine-agnostic, so it runs once under
+// Chromium and is kept off every other gate.
+const PAYWALL_RESUME_SPEC = /paywall-resume-flow\.spec\.ts/;
+
 // Task #1042 — the clearnet-path-indicator gate loads the home-screen header
 // (StartScreen full-frame, via the DEV-only /__test/start-screen route) and
 // proves the CLEARNET PATH badge + one-click .onion switch render together on
@@ -179,22 +188,22 @@ export default defineConfig({
     // away from the flow spec; their thresholds are engine-tuned.
     {
       name: "chromium-360",
-      testIgnore: [FLOW_SPEC, DEVICE_CLOUD_SPEC, A11Y_SPEC, SHARE_WARNINGS_SPEC, MEDIA_SPEC, PAYMENT_FAILURE_SPEC, CLEARNET_PATH_SPEC],
+      testIgnore: [FLOW_SPEC, DEVICE_CLOUD_SPEC, A11Y_SPEC, SHARE_WARNINGS_SPEC, MEDIA_SPEC, PAYMENT_FAILURE_SPEC, CLEARNET_PATH_SPEC, PAYWALL_RESUME_SPEC],
       use: { ...devices["Desktop Chrome"], viewport: { width: 360, height: 780 } },
     },
     {
       name: "chromium-414",
-      testIgnore: [FLOW_SPEC, DEVICE_CLOUD_SPEC, A11Y_SPEC, SHARE_WARNINGS_SPEC, MEDIA_SPEC, PAYMENT_FAILURE_SPEC, CLEARNET_PATH_SPEC],
+      testIgnore: [FLOW_SPEC, DEVICE_CLOUD_SPEC, A11Y_SPEC, SHARE_WARNINGS_SPEC, MEDIA_SPEC, PAYMENT_FAILURE_SPEC, CLEARNET_PATH_SPEC, PAYWALL_RESUME_SPEC],
       use: { ...devices["Desktop Chrome"], viewport: { width: 414, height: 896 } },
     },
     {
       name: "webkit-360",
-      testIgnore: [FLOW_SPEC, DEVICE_CLOUD_SPEC, A11Y_SPEC, SHARE_WARNINGS_SPEC, MEDIA_SPEC, PAYMENT_FAILURE_SPEC, CLEARNET_PATH_SPEC],
+      testIgnore: [FLOW_SPEC, DEVICE_CLOUD_SPEC, A11Y_SPEC, SHARE_WARNINGS_SPEC, MEDIA_SPEC, PAYMENT_FAILURE_SPEC, CLEARNET_PATH_SPEC, PAYWALL_RESUME_SPEC],
       use: { ...devices["Desktop Safari"], viewport: { width: 360, height: 780 } },
     },
     {
       name: "webkit-414",
-      testIgnore: [FLOW_SPEC, DEVICE_CLOUD_SPEC, A11Y_SPEC, SHARE_WARNINGS_SPEC, MEDIA_SPEC, PAYMENT_FAILURE_SPEC, CLEARNET_PATH_SPEC],
+      testIgnore: [FLOW_SPEC, DEVICE_CLOUD_SPEC, A11Y_SPEC, SHARE_WARNINGS_SPEC, MEDIA_SPEC, PAYMENT_FAILURE_SPEC, CLEARNET_PATH_SPEC, PAYWALL_RESUME_SPEC],
       use: { ...devices["Desktop Safari"], viewport: { width: 414, height: 896 } },
     },
     // ── Flow gate: core path under three engines.
@@ -281,6 +290,12 @@ export default defineConfig({
       testMatch: PAYMENT_FAILURE_SPEC,
       use: { ...devices["Desktop Chrome"] },
     },
+    // NOTE: The paywall-resume-flow spec runs under playwright.resume.config.ts
+    // (not here) because it requires the real API server alongside the Vite
+    // dev server. The spec is listed in testIgnore of the layout projects above
+    // so it is not accidentally picked up by those projects. Run it with:
+    //   pnpm --filter @workspace/void-client run test:playwright:resume
+
     // ── Clearnet-path-indicator gate (Task #1042, extended in Task #1054):
     // real-browser proof that the home-screen header renders the CLEARNET
     // PATH badge + one-click .onion switch together on clearnet, and
