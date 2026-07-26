@@ -87,6 +87,7 @@ const PRIVATE_DOCS = new Set([
   "security-audit-internal-2026-04.md",
   "manifest-review-2026-05.md",
   "manifest-review-2026-06.md",
+  "release-runbook.md", // operator release runbook — PRIVATE, stripped by §3; names .agents/ and internal paths by design
 ]);
 
 // Hazard-procedure / audit-ledger docs that SHIP but exist to DESCRIBE these

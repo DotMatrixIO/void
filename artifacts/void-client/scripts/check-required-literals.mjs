@@ -334,8 +334,8 @@ checkRequiredLiteral(
 //     future tone rewrite that softened or dropped them would gut the note.
 //     Pinned the way other pages' anchor lines are.
 for (const literal of [
-  "the room can’t betray you, because there is nothing in it to take",
-  "so I can’t hand over what I didn’t build",
+  "I didn’t build the things that could be turned against us",
+  "so they can’t be handed over",
   "the whole thing breaks on purpose",
   "an act of refusal in 2026",
 ]) {
@@ -388,10 +388,10 @@ for (const literal of [
 //     nothing pinned the new wording, so a future refactor or copy pass
 //     could silently revert them. Locked alongside the other anchor lines.
 for (const literal of [
-  "Everything we say and do online is watched.",
-  "it feels exactly as creepy as it is",
-  "This is unacceptable",
-  "strikes me as downright wholesome.",
+  "Everything we say and do online is watched, and we all know this.",
+  "It’s constant and feels creepy",
+  "It’s unacceptable, but we call it normal.",
+  "More privacy is the wholesome move here.",
 ]) {
   checkRequiredLiteral(
     WHY_PAGE,

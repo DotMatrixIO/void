@@ -15,6 +15,12 @@ agent, and a first publication of a privacy tool demands a human read that no
 automated pass can stand in for. Everything below is written so the operator
 can run it directly.
 
+> **Already published?** The §3 fresh-history snapshot below was a one-time
+> act and is DONE — `DotMatrixIO/void` is live. For every subsequent release,
+> follow the operator release runbook at `docs/release-runbook.md` (PRIVATE,
+> never ships), which reuses this document's strip list and §4 verification
+> gates but commits incrementally onto the existing public `main`.
+
 **Ordering.** Run this procedure **last**, after the pre-publish hygiene, the
 onion-bake, and the go-live-runbook changes have landed, so the snapshot
 captures the final tree. If any of those land after the snapshot is taken,
@@ -210,6 +216,7 @@ gitignored).
 | `docs/incident-response.md`, `docs/onion-mirror-runbook.md`, `docs/lightning-failure-injection-runbook.md`, `docs/tor-circuit-degradation-runbook.md`, `docs/sri-canary-runbook.md` | **SHIP** | Operator runbooks; linked from `README-selfhost.md` / `VOID_TECHNICAL_OVERVIEW.md`. Operator-facing by design. |
 | `docs/signaling-envelope-audit.md`, `docs/onion-fail-open-audit.md`, `docs/contrast-audit.md`, `docs/code-quirks-index.md`, `docs/browser-compatibility.md`, `docs/privacy-non-goals.md`, `docs/log-correlation-audit.md`, `docs/provenance-transparency-log-scoping.md`, `docs/frontend-resource-cleanup-audit.md`, `docs/audio-context-leak-verification.md`, `docs/roompage-wire-error-code-triage.md`, `docs/tor-reconnect-notes.md` | **SHIP** | Engineering references linked from shipping docs / source comments; no internal-only material. Confirm clean on the read. |
 | `docs/_fragments/*`, `docs/research/*`, `docs/security/*` | **READ INDIVIDUALLY** | Sub-trees not surveyed file-by-file here; include in the §4 grep and give each a human read before the snapshot. |
+| `docs/release-runbook.md` | **PRIVATE** | The operator release runbook (how to push each release to both repos + deploy the VPS). Names `.agents/` paths, internal tooling, and the operator's live infrastructure by design. Never ships; §3 strips it. |
 | **This document** (`docs/pre-publish-scrub-2026-06.md`) | **SHIP** | Contains no secret and no legal name (the legal-name grep uses a placeholder the operator fills locally). Publishing it is consistent with VOID's transparency posture and with the public `README` already disclosing the squashed-baseline rationale. |
 | `.agents/**` (incl. `.agents/archive/agent-product-revival-2026-06.md`) | **NEVER** | See §1.6 — candid internal agent memory and the internal agent-product revival doc; explicit delete in §3. |
 | `replit.md` | **NEVER** | Root-level internal dev/agent context: project overview, a "User preferences" section, and dozens of internal `Task #NNN` references. Not curated public documentation; same class as `.agents/`. Explicit delete in §3. (Leaked through the old docs-only survey — see the §3 step 1b gate.) |
@@ -316,6 +323,7 @@ rm -f  "$PUB/replit.nix"                    # Replit Nix env definition — plan
 rm -f  "$PUB/docs/security-audit-internal-2026-04.md"
 rm -f  "$PUB/docs/manifest-review-2026-05.md"
 rm -f  "$PUB/docs/manifest-review-2026-06.md"
+rm -f  "$PUB/docs/release-runbook.md"       # operator release runbook — PRIVATE (§2); names internal paths/infrastructure by design
 #    docs/marketing-claims-audit.md is NOT pulled — it was promoted to SHIP (§2).
 #
 #    NESTED strips — internal material that lives INSIDE a SHIP dir (artifacts/

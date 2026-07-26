@@ -66,7 +66,6 @@ export const SHIP = [
 // Top-level entries that must be stripped from the snapshot before publishing.
 // Each must also appear in the §3 strip commands and the §4.2 absence checks.
 export const STRIP = [
-  ".agents", // agent memory — NEVER ships
   ".replit", // Replit platform/orchestration config (historically carried a secret)
   ".replitignore", // Replit deploy-image ignore — managed-platform cruft
   "replit.md", // internal dev/agent context incl. a "User preferences" section

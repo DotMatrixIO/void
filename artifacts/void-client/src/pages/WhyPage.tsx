@@ -61,42 +61,38 @@ export default function WhyPage() {
         <div style={headingStyle}>WHY, a founder's note</div>
 
         <p style={{ margin: "0 0 20px" }}>
-          Everything we say and do online is watched. We all know this. The
-          watching is constant, and it feels exactly as creepy as it is.
-          Worse, the records of our behavior can be subpoenaed, and they sit
-          on servers — often unencrypted, always hackable — long after we’ve
-          forgotten the conversation that made them. This is unacceptable,
-          but somehow we’ve agreed to call it normal.
+          Everything we say and do online is watched, and we all know this.
+          It’s constant and feels creepy. Worse, records of our conversations
+          can be subpoenaed for basically no cause and often sit on hackable
+          servers long after we’ve forgotten the conversation.{" "}
+          It’s unacceptable, but we call it normal.
         </p>
         <p style={{ margin: "0 0 20px" }}>
-          With that in mind, a little more privacy and a little more
-          anonymity in our digital lives strikes me as downright wholesome.
+          More privacy is the wholesome move here.
         </p>
         <p style={{ margin: "0 0 28px" }}>
-          This project wants a different default. One where a conversation
-          can happen and then simply be over. Where a room can just be a
-          room, and not an entry in a database. I am not trying to help
-          anyone hide wrongdoing. I’m trying to restore something ordinary —
-          the privacy of a private conversation. Government whistleblowers
-          and survivors of domestic violence need to reach journalists and
-          safe houses without leaving a trail. That’s not an edge case;
-          that’s the point. If the goal sounds modest, it’s because it is.
+          This project wants conversations to happen and then simply be over.
+          We want online rooms to just be rooms, not entries in a database. I
+          am not trying to help anyone hide wrongdoing. I’m trying to restore
+          the ordinary — the ordinary privacy of a private conversation.
+          Government whistleblowers and survivors of domestic violence need
+          to reach journalists and safe houses without leaving a trail.
+          That’s not an edge case; that’s the point. If the goal sounds
+          modest, it is.
         </p>
         <p style={{ margin: "0 0 28px" }}>
-          And here is the part I’m proudest of:{" "}
-          the room can’t betray you, because there is nothing in it to take.
-          Your video never touches the server — it travels straight from you
-          to the people you’re talking to. There’s no recording. No
-          transcript. No list of who was there. No chat feature with a log. I
-          didn’t build the things that could be turned against you,{" "}
-          so I can’t hand over what I didn’t build.
+          Your video never touches the server. It travels straight from you
+          to the people you’re talking to. There are no recordings,
+          transcripts, lists of who was there, or chat features with logs.
+          I didn’t build the things that could be turned against us,{" "}
+          so they can’t be handed over.
         </p>
         <p style={{ margin: "0 0 28px" }}>
-          I also don’t ask you to trust me on this. I’m a stranger on the
-          internet, and you shouldn’t trust strangers on the internet. So
-          the proof is written into the machine itself. If anyone tries to
-          route your data out the back, the whole thing breaks on purpose.
-          And you can easily see the break.
+          Also, I’m a stranger on the internet, and you shouldn’t trust
+          strangers on the internet. So the proof is written into the machine
+          itself. If anyone tries to route your data out the back,{" "}
+          the whole thing breaks on purpose. And you can easily see the
+          break.
         </p>
         <p style={{ margin: "0 0 28px" }}>
           One honest caveat: the room will hide what you say, but not the
@@ -119,13 +115,10 @@ export default function WhyPage() {
         {onionUrl && (
           <p style={{ margin: "0 0 28px" }}>
             If a network observer is part of what you’re worried about,{" "}
-            reach VOID at its .onion address in Tor Browser. That hides from
-            our server which network you connected from — the strongest
-            IP-level protection we offer. It is not a cloak: the call’s media
-            still travels over a relay that sees an address, and Tor does
-            nothing about the other people in the room, your own device, or
-            anyone who can see your screen. For the full picture of what this
-            does and doesn’t protect, read{" "}
+            reach VOID at its .onion address in Tor Browser. That hides your
+            IP address from our server, but Tor does nothing about the other
+            people in the room, your own device, or anyone who can see your
+            screen. For the full privacy picture, read{" "}
             <Link href="/tor" style={torLinkStyle}>
               how Tor helps →
             </Link>{" "}
@@ -149,19 +142,19 @@ export default function WhyPage() {
           ▌ Also, there was a Gameboy.
         </p>
         <p style={{ margin: "0 0 20px" }}>
-          A while back I built a coding project that imagined what Zoom might
+          A while back I had a coding project that imagined what Zoom might
           have looked like if it had been born in the 1990s and lived on a
-          classic Gameboy. The tiny screen and four colors led to some
-          not-so-flattering distortions — and they were fun. I started
-          wondering what those pixelated displays might actually be good for
-          now, beyond nostalgia.
+          classic gaming handheld. The tiny screen and four colors led to
+          some not-so-flattering distortions, and I wondered what the
+          pixelated displays might actually be good for now, beyond
+          nostalgia.
         </p>
         <p style={{ margin: "0 0 20px" }}>
           A 4-color, low-resolution version of you is still unmistakably you
           to a friend on the other end. The timing is right. The expressions
           land. But it cannot be fed into a face-recognition model. It cannot
           be used to train a deepfake of you. The texture that felt charming
-          on a Gameboy in 1992 turns out to be something like{" "}
+          in 1992 turns out to be something like{" "}
           an act of refusal in 2026.
         </p>
         <p style={{ margin: "0 0 28px" }}>

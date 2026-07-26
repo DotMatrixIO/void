@@ -75,7 +75,7 @@ export interface MasksSheetProps {
 }
 
 type PendingConfirm = "video" | "voice" | null;
-type AudioState = "idle" | "recording" | "playing";
+type AudioState = "idle" | "recording" | "playing" | "nosignal";
 
 // Task #594: how many seconds of the masked mic "TAP TO HEAR" records
 // before playing the masked recording back. Nothing is captured until the
@@ -132,6 +132,7 @@ export default function MasksSheet({
   } | null>(null);
   const playbackRef = useRef<AudioBufferSourceNode | null>(null);
   const recordTimerRef = useRef<number | null>(null);
+  const noSignalTimerRef = useRef<number | null>(null);
 
   const dialogRef = useDialogFocusTrap<HTMLDivElement>({
     onEscape: onClose,
@@ -165,9 +166,28 @@ export default function MasksSheet({
   function resetHear() {
     clearRecordTimer();
     stopPlayback();
+    if (noSignalTimerRef.current !== null) {
+      window.clearTimeout(noSignalTimerRef.current);
+      noSignalTimerRef.current = null;
+    }
     const c = captureRef.current;
     if (c) c.capturing = false;
     setAudioState("idle");
+  }
+
+  // Surface a transient "NO MIC SIGNAL" state on the button instead of
+  // silently returning to idle when a tap produced no audio — a silent
+  // no-op (missing capture chain, suspended context, or a mic that
+  // delivered zero frames) looks identical to a broken button otherwise.
+  function showNoSignal() {
+    setAudioState("nosignal");
+    if (noSignalTimerRef.current !== null) {
+      window.clearTimeout(noSignalTimerRef.current);
+    }
+    noSignalTimerRef.current = window.setTimeout(() => {
+      noSignalTimerRef.current = null;
+      setAudioState("idle");
+    }, 2500);
   }
 
   // Flush the capture: cancel record/playback AND drop the recorded
@@ -423,10 +443,27 @@ export default function MasksSheet({
   // captured before the tap; the recording is dropped the moment the
   // capture is flushed (close / BURN / leave).
   function hearVoice() {
-    const c = captureRef.current;
-    if (!c) return;
     if (audioState !== "idle") return;
+    const c = captureRef.current;
+    if (!c) {
+      // No capture chain was ever wired (mic track missing or the Web
+      // Audio capture nodes failed to build). Say so instead of doing
+      // nothing — a silent no-op is indistinguishable from a bug.
+      showNoSignal();
+      return;
+    }
     resetHear();
+    // Firefox (unlike Chrome) does not reliably auto-start an
+    // AudioContext that was created outside the click that taps this
+    // button. Resume explicitly inside the gesture; without a running
+    // context the ScriptProcessor never fires and the capture stays
+    // empty.
+    const ac = audioCtxRef.current;
+    if (ac && ac.state !== "running") {
+      try {
+        void ac.resume();
+      } catch {}
+    }
     pipelineRef.current?.setVoiceMode(draftVoice);
 
     c.chunks = [];
@@ -453,7 +490,7 @@ export default function MasksSheet({
     c.capturing = false;
     const len = c.totalSamples;
     if (len === 0) {
-      setAudioState("idle");
+      showNoSignal();
       return;
     }
 
@@ -681,7 +718,9 @@ export default function MasksSheet({
                 ? "PLAYING…"
                 : audioState === "recording"
                   ? "RECORDING…"
-                  : "TAP TO HEAR"}
+                  : audioState === "nosignal"
+                    ? "NO MIC SIGNAL"
+                    : "TAP TO HEAR"}
             </button>
             <span
               data-testid="masks-sheet-hear-hint"

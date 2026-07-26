@@ -34,11 +34,11 @@ import WhyPage from "@/pages/WhyPage";
 // snapshots.
 
 describe("WhyPage short-form prose", () => {
-  it("renders the load-bearing 'nothing in it to take' line", () => {
+  it("renders the load-bearing 'nothing to hand over' line", () => {
     render(<WhyPage />);
     expect(
       screen.getByText(
-        /the room can’t betray you, because there is nothing in it to take/,
+        /I didn’t build the things that could be turned against us/,
       ),
     ).toBeInTheDocument();
   });
@@ -46,7 +46,7 @@ describe("WhyPage short-form prose", () => {
   it("renders the Gameboy origin paragraph", () => {
     render(<WhyPage />);
     expect(
-      screen.getByText(/A while back I built a coding project that imagined what Zoom/),
+      screen.getByText(/A while back I had a coding project that imagined what Zoom/),
     ).toBeInTheDocument();
   });
 

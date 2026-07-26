@@ -65,7 +65,7 @@
     "puppeteer-core": "^24.42.0",
     "react": "catalog:",
     "react-dom": "catalog:",
-    "sharp": "^0.34.5",
+    "sharp": "^0.35.0",
     "tailwind-merge": "catalog:",
     "tailwindcss": "catalog:",
     "vite": "catalog:",

@@ -131,6 +131,11 @@ async function withServer(extraEnv, clientDist, fn) {
       // random hex (or leaving unset) keeps startup green.
       TURN_SECRET: "",
       PAYWALL_SECRET: "",
+      // Task #1143 added a production-posture FATAL when NODE_ENV=production
+      // and PAYWALL_SECRET is unset/empty. This smoke test intentionally
+      // simulates a bare install with no secret, so use the documented
+      // opt-out rather than weakening the guard.
+      PAYWALL_ALLOW_EPHEMERAL_SECRET: "1",
       // Keep room-state persistence out of the repo tree: the server
       // defaults ROOM_STATE_FILE to data/rooms.json relative to its cwd,
       // which would leave a stray top-level data/ dir behind (and trip

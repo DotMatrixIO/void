@@ -30,6 +30,7 @@
  *   - docs/security-audit-internal-2026-04.md
  *   - docs/manifest-review-2026-05.md
  *   - docs/manifest-review-2026-06.md
+ *   - docs/release-runbook.md
  *   - docs/_private/ (and anything under it)
  *
  * PLUS a ZERO-TOLERANCE target with NO allowlist:
@@ -104,6 +105,7 @@ const NEVER_SHIP_TARGETS = [
   "security-audit-internal-2026-04.md",
   "manifest-review-2026-05.md",
   "manifest-review-2026-06.md",
+  "release-runbook.md",
   "docs/_private",
 ];
 
@@ -115,6 +117,7 @@ const CARVE_OUT_FILES = new Set([
   "docs/security-audit-internal-2026-04.md",
   "docs/manifest-review-2026-05.md",
   "docs/manifest-review-2026-06.md",
+  "docs/release-runbook.md",
   "docs/pre-publish-scrub-2026-06.md",
   "artifacts/void-client/scripts/check-publish-doc-hygiene.mjs",
   "artifacts/void-client/scripts/check-publish-cross-links.mjs",
@@ -150,7 +153,12 @@ const ZERO_TOLERANCE_TARGETS = [".agents/"];
 // is the pair, not the line: once a file points at a target, deleting the
 // target dangles that file regardless of how many lines do so.
 const ALLOWLIST = [
-  // Empty by design. Every shipping file that once cited a never-ship doc has
+  // replit.md points at the PRIVATE operator release runbook from its
+  // "Where the detail lives" index. replit.md is itself a top-level STRIP
+  // entry (publish-inventory manifest) that never reaches the public
+  // snapshot, so this pointer can never dangle in the public tree.
+  ["replit.md", "release-runbook.md"],
+  // Otherwise empty by design. Every shipping file that once cited a never-ship doc has
   // had that citation severed (rationale inlined) or repointed to a shipping
   // doc (README-selfhost.md / docs/security-audit-public-2026-04.md §11). The
   // last outbound citation — docs/marketing-claims-audit.md -> manifest-review-

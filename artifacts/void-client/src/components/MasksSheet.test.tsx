@@ -176,6 +176,14 @@ describe("MasksSheet voice tap-to-hear capture (Task #594)", () => {
       vi.advanceTimersByTime(4000);
     });
     expect(lastBufferSource).toBeNull();
+    // An empty window is no longer a silent no-op: the button surfaces a
+    // transient NO MIC SIGNAL state, then returns to idle.
+    expect(screen.getByTestId("masks-sheet-hear").textContent).toContain(
+      "NO MIC SIGNAL",
+    );
+    act(() => {
+      vi.advanceTimersByTime(3000);
+    });
     expect(screen.getByTestId("masks-sheet-hear").textContent).toContain(
       "TAP TO HEAR",
     );
