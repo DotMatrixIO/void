@@ -514,12 +514,21 @@ describe("room state persistence across restarts", () => {
         setOnRoomsChanged(null);
         expect(getPersistableSnapshot().length).toBe(1);
 
-        // Wait for a compaction tick + the 0ms debounced write to land.
-        await new Promise((r) => setTimeout(r, 120));
-
-        const onDisk = JSON.parse(readFileSync(statePath, "utf8"));
-        const onDiskCodes = onDisk.rooms.map((r: { code: string }) => r.code);
-        expect(onDiskCodes).toEqual([codes[1]]);
+        // Poll until a compaction tick + the 0ms debounced write have
+        // landed the shrunken snapshot on disk. Under full-suite load
+        // timers and IO can be delayed well past the nominal 20ms
+        // interval, so we use a generous deadline instead of a fixed
+        // sleep; the loop exits as soon as the write lands.
+        const readCodes = () =>
+          (JSON.parse(readFileSync(statePath, "utf8")).rooms as { code: string }[]).map(
+            (r) => r.code,
+          );
+        const deadline = Date.now() + 10_000;
+        while (Date.now() < deadline) {
+          if (JSON.stringify(readCodes()) === JSON.stringify([codes[1]])) break;
+          await new Promise((r) => setTimeout(r, 25));
+        }
+        expect(readCodes()).toEqual([codes[1]]);
       } finally {
         handle.stop();
       }
@@ -597,15 +606,29 @@ describe("room state persistence across restarts", () => {
 
         handle.flushSync();
 
-        // Drain microtasks / give any in-flight async write a few
-        // ticks to settle. If the gen check failed, this is when
-        // the stale rename would happen and erase roomId2.
-        await new Promise((r) => setTimeout(r, 100));
+        // flushSync is synchronous, so the file must contain both
+        // rooms immediately.
+        const readCodes = () =>
+          (JSON.parse(readFileSync(statePath, "utf8")).rooms as { code: string }[]).map(
+            (r) => r.code,
+          );
+        expect(readCodes()).toContain(roomId1);
+        expect(readCodes()).toContain(roomId2);
 
-        const onDisk = JSON.parse(readFileSync(statePath, "utf8"));
-        const codes = onDisk.rooms.map((r: { code: string }) => r.code);
-        expect(codes).toContain(roomId1);
-        expect(codes).toContain(roomId2);
+        // Now OBSERVE for a settle window: if the gen/rename
+        // linearization ever regressed, the stale in-flight async
+        // write from stage 1 would rename in late and erase roomId2.
+        // We re-read repeatedly rather than sleeping a fixed 100ms
+        // and asserting once — the condition must hold at EVERY
+        // read, so slowness can only lengthen the observation, never
+        // fail the test spuriously.
+        const settleUntil = Date.now() + 500;
+        while (Date.now() < settleUntil) {
+          const codes = readCodes();
+          expect(codes).toContain(roomId1);
+          expect(codes).toContain(roomId2);
+          await new Promise((r) => setTimeout(r, 25));
+        }
       } finally {
         handle.stop();
       }

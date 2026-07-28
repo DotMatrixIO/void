@@ -211,6 +211,24 @@ async function pause(ms: number): Promise<void> {
   await new Promise<void>((r) => setTimeout(r, ms));
 }
 
+// Poll until `cond()` is truthy, or fail after `timeoutMs`. Replaces the
+// fixed-length sleeps that flaked under heavy container load (the ECDHE
+// handshake + offer/answer round-trips have no upper time bound there).
+async function waitUntil(
+  cond: () => boolean,
+  label: string,
+  timeoutMs = 10_000,
+  intervalMs = 25,
+): Promise<void> {
+  const deadline = Date.now() + timeoutMs;
+  while (!cond()) {
+    if (Date.now() > deadline) {
+      throw new Error(`Timed out after ${timeoutMs}ms waiting for: ${label}`);
+    }
+    await pause(intervalMs);
+  }
+}
+
 interface ManagerObs {
   manager: WebRTCManager;
   failures: SecureChannelFailures[];
@@ -320,8 +338,19 @@ describe("WebRTCManager E2E — cooperative relay-only renegotiation", () => {
 
       void hostObs.manager.initiateOffer(NON_HOST_PEER);
 
-      // Allow enough time for full ECDHE handshake + offer/answer exchange.
-      await pause(400);
+      // Poll until the full ECDHE handshake + offer/answer exchange has
+      // built a PC on BOTH sides. (A fixed 400ms sleep here flaked under
+      // heavy container load — see task 1162.)
+      const hasAllPolicyPC = (obs: ManagerObs, peerId: string) =>
+        obs.builtPCs.some(
+          (e) => e.peerId === peerId && e.pc.iceTransportPolicy === "all",
+        );
+      await waitUntil(
+        () =>
+          hasAllPolicyPC(hostObs, NON_HOST_PEER) &&
+          hasAllPolicyPC(nonHostObs, HOST_PEER),
+        "initial 'all'-policy PCs built on both peers",
+      );
 
       // Confirm that initial PCs were built with policy "all".
       const allPolicyPCsHost = hostObs.builtPCs.filter(
@@ -384,9 +413,23 @@ describe("WebRTCManager E2E — cooperative relay-only renegotiation", () => {
 
       await Promise.all([hostRelayModeReceived, nonHostRelayModeReceived]);
 
-      // Allow enough time for the new ECDHE handshake + offer/answer that
-      // reinitializeAllPeers kicks off on the host side.
-      await pause(500);
+      // Poll until the new ECDHE handshake + offer/answer that
+      // reinitializeAllPeers kicks off has built a "relay" PC on both
+      // sides AND every stale "all" PC has been closed. (A fixed 500ms
+      // sleep here was the same flake class as step 3.)
+      const hasRelayPC = (obs: ManagerObs, peerId: string) =>
+        obs.builtPCs.some(
+          (e) => e.peerId === peerId && e.pc.iceTransportPolicy === "relay",
+        );
+      await waitUntil(
+        () =>
+          hasRelayPC(hostObs, NON_HOST_PEER) &&
+          hasRelayPC(nonHostObs, HOST_PEER) &&
+          [...allPolicyPCsHost, ...allPolicyPCsNonHost].every(
+            ({ pc }) => pc.connectionState === "closed",
+          ),
+        "'relay'-policy PCs built and stale 'all' PCs closed on both peers",
+      );
 
       // ── 8. Assert: new PCs use iceTransportPolicy "relay" ─────────────
 

@@ -107,9 +107,17 @@ jobs:
           # .env relaxes the onion-bake guard for a clearnet-only smoke build,
           # so no .onion mirror host is required in CI. LIGHTNING_BACKEND=mock
           # keeps the paywall out of the boot path.
-          cat > /tmp/void-clean/.env <<'EOF'
+          #
+          # PAYWALL_SECRET mirrors Quick Start step 3 (`openssl rand -hex 32`).
+          # The container RUNS as NODE_ENV=production (hardcoded in compose),
+          # where the server fails closed without a stable PAYWALL_SECRET —
+          # omitting it here crash-loops the container and the health check
+          # never passes (July 2026 CI failures).
+          PAYWALL_SECRET=$(openssl rand -hex 32)
+          cat > /tmp/void-clean/.env <<EOF
           NODE_ENV=development
           LIGHTNING_BACKEND=mock
+          PAYWALL_SECRET=${PAYWALL_SECRET}
           EOF
 
       - name: Build & boot the stack (docker compose up --build)

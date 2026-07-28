@@ -247,7 +247,14 @@ export function installRoomsPersistence(
         try { await fsp.unlink(tmp); } catch { /* may have been cleaned up */ }
         return;
       }
-      await fsp.rename(tmp, filePath);
+      // The rename MUST be synchronous so the gen re-check above and
+      // the rename execute as one atomic JS turn. With an async
+      // rename there is a window where a newer writer (e.g. the
+      // shutdown flushSync) bumps the gen and writes the final file
+      // AFTER our check passed but BEFORE our rename lands — letting
+      // this stale snapshot clobber the newer one. rename is a cheap
+      // metadata op, so doing it sync here costs nothing.
+      renameSync(tmp, filePath);
       lastWrittenCount = count;
     } catch (err) {
       logger.warn({ err, path: filePath }, "Failed to persist room state");
